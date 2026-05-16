@@ -1,14 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import {
-    User,
-    Stethoscope,
-    ClipboardList,
-    CheckSquare,
-    ArrowLeft,
-    Save,
-    ArrowRight
-} from 'lucide-react';
+import { User, Stethoscope, ClipboardList, CheckSquare, ArrowLeft, Save, ArrowRight } from 'lucide-react';
+import { supabase } from "../lib/supabase.js";
 
 const STEPS = [
     { id: 1, title: 'Health Care Institution (HCI) Information', icon: <Stethoscope size={20} /> },
@@ -17,10 +10,107 @@ const STEPS = [
     { id: 4, title: 'Certification of Consumption of Health Care Institution', icon: <CheckSquare size={20} /> },
 ];
 
-export default function SubmissionForm({ onSubmit, onCancel }) {
+export default function App() {
+    const handleSupabaseSubmit = async (data) => {
+        try {
+            const parseNum = (val) => val ? parseFloat(val) : null;
+            const parseDate = (val) => val ? val : null;
+
+            // INSERTING PART 3 INPUTS
+            const { error: part3Error } = await supabase
+                .from('Part3_Consumption_Consent')
+                .insert([
+                    {
+                        is_benefit_enough: data.certifiedEnough,
+                        enough_hci_fees: parseNum(data.hciFeesEnough),
+                        enough_pf_fees: parseNum(data.pfFeesEnough),
+                        enough_grand_total: parseNum(data.grandTotalEnough),
+
+                        is_benefit_consumed_or_with_purchases: data.consumedPrior,
+
+                        hci_actual_charges: parseNum(data.hciActualCharges),
+                        hci_discount_amount: parseNum(data.hciDiscount),
+                        hci_philhealth_benefit: parseNum(data.hciPhilhealthBenefit),
+                        hci_copay_amount: parseNum(data.hciAfterDeductionAmount),
+                        hci_paid_by_member: data.hciDeductionPayers.member,
+                        hci_paid_by_hmo: data.hciDeductionPayers.hmo,
+                        hci_paid_by_others: data.hciDeductionPayers.others,
+
+                        pf_actual_charges: parseNum(data.pfActualCharges),
+                        pf_discount_amount: parseNum(data.pfDiscount),
+                        pf_philhealth_benefit: parseNum(data.pfPhilhealthBenefit),
+                        pf_copay_amount: parseNum(data.pfAfterDeductionAmount),
+                        pf_paid_by_member: data.pfDeductionPayers.member,
+                        pf_paid_by_hmo: data.pfDeductionPayers.hmo,
+                        pf_paid_by_others: data.pfDeductionPayers.others,
+
+                        drugs_cost_type: data.drugsCostType,
+                        drugs_amount: parseNum(data.drugsAmount),
+                        diagnostic_cost_type: data.diagnosticCostType,
+                        diagnostic_amount: parseNum(data.diagnosticAmount),
+
+                        representative_name: data.representativeName,
+                        consent_date_signed: parseDate(data.representativeDateSigned),
+                        representative_relationship: data.representativeRelationship,
+                        representative_relationship_others: data.representativeRelationshipSpecify,
+                        signing_behalf_reason: data.behalfReason,
+                        signing_behalf_reason_others: data.behalfReasonSpecify,
+
+                        consent_medical_records: data.consentMedicalRecords,
+                        consent_liability_free: data.consentLiabilityFree
+                    }
+                ]);
+
+            if (part3Error) throw part3Error;
+
+            // --- INSERT PART 4 ---
+            const { error: part4Error } = await supabase
+                .from('Part4_Certification')
+                .insert([
+                    {
+                        hci_name: data.hci_name,
+                        designation: data.designation,
+                        date: parseDate(data.date_signed),
+                        is_certified: data.finalCertification
+                    }
+                ]);
+
+            if (part4Error) throw part4Error;
+
+            alert('Form submitted successfully to Supabase!');
+            window.location.reload();
+        } catch (error) {
+            console.error('Supabase Insert Error:', error);
+            alert(`Error saving to database: ${error.message}`);
+        }
+    }
+
+    return (
+        <div className="min-h-screen bg-slate-100 py-12 px-4">
+            <SubmissionForm
+                onSubmit={(data) => {
+                    console.log('Form Submitted:', data);
+                    alert('Form submitted successfully! Check console for data.');
+                    window.location.reload();
+                }}
+
+                // --------- DON'T UNCOMMENT THIS LINE YET
+                // onSubmit={handleSupabaseSubmit}
+                onCancel={() => {
+                    if (confirm('Are you sure you want to cancel? All progress will be lost.')) {
+                        window.location.reload();
+                    }
+                }}
+            />
+        </div>
+    );
+}
+
+function SubmissionForm({ onSubmit, onCancel }) {
     const [currentStep, setCurrentStep] = React.useState(1);
 
     const [formData, setFormData] = React.useState({
+        // Part I & II
         patient_name: '',
         philhealth_id: '',
         age: '',
@@ -33,39 +123,155 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
         duration: '',
         accreditation_number: '',
         remarks: '',
-        certified: false,
+
+        // ---------------- !!!!! DON'T CHANGE THE PART BELOW !!!!! ---------------- //
+        // Part III - Section A
+        certifiedEnough: false,
+        hciFeesEnough: '',
+        pfFeesEnough: '',
+
+        consumedPrior: false,
+        // Co-pay HCI
+        hciActualCharges: '',
+        hciDiscount: '',
+        hciPhilhealthBenefit: '',
+        hciAfterDeductionAmount: '',
+        hciDeductionPayers: {
+            member: false,
+            hmo: false,
+            others: false
+        },
+
+        // Co-pay PF
+        pfActualCharges: '',
+        pfDiscount: '',
+        pfPhilhealthBenefit: '',
+        pfAfterDeductionAmount: '',
+        pfDeductionPayers: {
+            member: false,
+            hmo: false,
+            others: false
+        },
+
+        // Purchases
+        drugsCostType: 'none', // 'none' or 'amount'
+        drugsAmount: '',
+        diagnosticCostType: 'none', // 'none' or 'amount'
+        diagnosticAmount: '',
+
+        // Part III - Section B
+        representativeName: '',
+        representativeDateSigned: '',
+        representativeRelationship: '',
+        representativeRelationshipSpecify: '',
+        behalfReason: '',
+        behalfReasonSpecify: '',
+        consentMedicalRecords: false,
+        consentLiabilityFree: false,
+
+        // Part IV
+        hci_name: '',
+        designation: '',
+        date_signed: '',
+        finalCertification: false,
+        // ---------------- !!!!! DON'T CHANGE THE PART ABOVE !!!!! ---------------- //
     });
 
-    const handleChange = (e) => {
-        const { name, value, type } = e.target;
-        const val =
-            type === 'checkbox' ? e.target.checked : value;
+    // Compute Grand Total for Section A (PhilHealth enough)
+    const grandTotalEnough = formData.certifiedEnough
+        ? ((parseFloat(formData.hciFeesEnough) || 0) + (parseFloat(formData.pfFeesEnough) || 0)).toString()
+        : '';
 
-        setFormData((prev) => ({
-            ...prev,
-            [name]: val,
-        }));
+    const handleChange = (e) => {
+        const { name, value, type, checked } = e.target;
+
+        if (type === 'checkbox') {
+            // 1. Clear Section A fields if "Enough Coverage" is unchecked
+            if (name === 'certifiedEnough' && !checked) {
+                setFormData(prev => ({
+                    ...prev,
+                    certifiedEnough: false,
+                    hciFeesEnough: '',
+                    pfFeesEnough: '',
+                }));
+            }
+            // 2. Clear Section A Co-pay & Purchases if "Consumed Prior" is unchecked
+            else if (name === 'consumedPrior' && !checked) {
+                setFormData(prev => ({
+                    ...prev,
+                    consumedPrior: false,
+                    hciActualCharges: '',
+                    hciDiscount: '',
+                    hciPhilhealthBenefit: '',
+                    hciAfterDeductionAmount: '',
+                    hciDeductionPayers: { member: false, hmo: false, others: false },
+                    pfActualCharges: '',
+                    pfDiscount: '',
+                    pfPhilhealthBenefit: '',
+                    pfAfterDeductionAmount: '',
+                    pfDeductionPayers: { member: false, hmo: false, others: false },
+                    drugsCostType: 'none',
+                    drugsAmount: '',
+                    diagnosticCostType: 'none',
+                    diagnosticAmount: ''
+                }));
+            }
+            // 3. Handle nested payers (hciDeductionPayers.member, etc.)
+            else if (name.includes('.')) {
+                const [parent, child] = name.split('.');
+                setFormData(prev => ({
+                    ...prev,
+                    [parent]: {
+                        ...prev[parent],
+                        [child]: checked
+                    }
+                }));
+            } else {
+                setFormData(prev => ({
+                    ...prev,
+                    [name]: checked
+                }));
+            }
+        } else {
+            // Handle clearing dependent text fields for radio buttons/selects
+            setFormData(prev => {
+                const newData = { ...prev, [name]: value };
+
+                // Clear Specification if relationship is not "Others"
+                if (name === 'representativeRelationship' && value !== 'Others') {
+                    newData.representativeRelationshipSpecify = '';
+                }
+                // Clear Reason Spec if reason is not "Others"
+                if (name === 'behalfReason' && value !== 'Others') {
+                    newData.behalfReasonSpecify = '';
+                }
+                // Clear Amount if Cost Type is "None"
+                if (name === 'drugsCostType' && value === 'none') {
+                    newData.drugsAmount = '';
+                }
+                if (name === 'diagnosticCostType' && value === 'none') {
+                    newData.diagnosticAmount = '';
+                }
+
+                return newData;
+            });
+        }
     };
 
-    const nextStep = () =>
-        setCurrentStep((prev) => Math.min(prev + 1, 4));
-
-    const prevStep = () =>
-        setCurrentStep((prev) => Math.max(prev - 1, 1));
+    const nextStep = () => setCurrentStep((prev) => Math.min(prev + 1, 4));
+    const prevStep = () => setCurrentStep((prev) => Math.max(prev - 1, 1));
 
     const isStepValid = () => {
-        if (currentStep === 1)
-            return formData.patient_name && formData.philhealth_id;
-
-        if (currentStep === 2)
-            return formData.diagnosis && formData.icd10_code;
-
+        if (currentStep === 1) return formData.patient_name && formData.philhealth_id;
+        if (currentStep === 2) return formData.diagnosis && formData.icd10_code;
+        if (currentStep === 3) return true; // Complex logic can be added
+        if (currentStep === 4) return formData.finalCertification && formData.hci_name;
         return true;
     };
 
     return (
-        <div className="max-w-4xl mx-auto pb-12">
-            <div className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
+        <div className="max-w-5xl mx-auto pb-12">
+            <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
                 {/* Header */}
                 <div className="bg-philhealth-green text-white p-8 relative overflow-hidden">
                     <div className="absolute top-0 right-0 p-10 opacity-5 pointer-events-none">
@@ -85,11 +291,11 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                 CF-2 (Claim Form 2)
                             </h2>
 
-                            <p className="opacity-70 text-xs mt-2 uppercase font-bold tracking-widest">
+                            <p className="opacity-70 text-xs mt-2 uppercase font-bold tracking-widest text-emerald-100">
                                 Revised September 2018
                             </p>
 
-                            <p className="opacity-70 text-xs mt-1 tracking-widest">
+                            <p className="opacity-70 text-[10px] mt-1 tracking-wider max-w-xl leading-relaxed italic">
                                 This form together with other supporting documents should be filed within sixty (60) calendar days from date of discharge.
                             </p>
                         </div>
@@ -98,7 +304,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                             {STEPS.map((s) => (
                                 <div
                                     key={s.id}
-                                    className={`w-10 h-10 rounded-full border-4 border-philhealth-green flex items-center justify-center text-xs font-bold ${
+                                    className={`w-10 h-10 rounded-full border-4 border-philhealth-green flex items-center justify-center text-xs font-bold transition-all duration-300 ${
                                         currentStep === s.id
                                             ? 'bg-philhealth-yellow text-philhealth-green scale-110 z-10'
                                             : currentStep > s.id
@@ -141,7 +347,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                             animate={{ x: 0, opacity: 1 }}
                             exit={{ x: -10, opacity: 0 }}
                             transition={{ duration: 0.2 }}
-                            className="space-y-8"
+                            className="space-y-10"
                         >
                             {/* ---------------- PART I HERE ---------------- */}
                             {currentStep === 1 && (
@@ -180,7 +386,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                             name="sex"
                                             value={formData.sex}
                                             onChange={handleChange}
-                                            className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold"
+                                            className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-philhealth-green/20 outline-none transition-all"
                                         >
                                             <option value="">Select</option>
                                             <option value="Male">Male</option>
@@ -220,60 +426,524 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                 </div>
                             )}
 
+                            {/* ---------------- !!!!! DON'T CHANGE THE PART BELOW !!!!! ---------------- */}
                             {/* ---------------- PART III HERE ---------------- */}
                             {currentStep === 3 && (
-                                <div className="space-y-8">
-                                    <FormInput
-                                        label="Procedure"
-                                        name="procedure"
-                                        value={formData.procedure}
-                                        onChange={handleChange}
-                                    />
+                                <div className="space-y-12">
+                                    {/* SECTION A */}
+                                    <section className="space-y-8">
+                                        <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest border-l-4 border-philhealth-green pl-4">
+                                            A. CERTIFICATION OF CONSUMPTION OF BENEFITS:
+                                        </h3>
 
-                                    <FormInput
-                                        label="Medications"
-                                        name="medications"
-                                        type="textarea"
-                                        value={formData.medications}
-                                        onChange={handleChange}
-                                    />
+                                        {/* Option 1: Enough Coverage */}
+                                        <div className="space-y-6 p-6 bg-emerald-50/50 rounded-2xl border border-emerald-100">
+                                            <label className="flex items-start gap-5 cursor-pointer group">
+                                                <div className="relative flex items-center justify-center mt-1">
+                                                    <input
+                                                        type="checkbox"
+                                                        name="certifiedEnough"
+                                                        checked={formData.certifiedEnough}
+                                                        onChange={handleChange}
+                                                        disabled={formData.consumedPrior}
+                                                        className="w-6 h-6 rounded border-slate-300 text-philhealth-green focus:ring-philhealth-green cursor-pointer transition-all disabled:opacity-30"
+                                                    />
+                                                </div>
 
-                                    <FormInput
-                                        label="Duration (days)"
-                                        name="duration"
-                                        type="number"
-                                        value={formData.duration}
-                                        onChange={handleChange}
-                                    />
+                                                <div className="flex-1">
+                                                    <p className="font-black text-philhealth-green text-xs uppercase tracking-widest mb-1">
+                                                        PhilHealth benefit is enough to cover HCI and PF Charges.
+                                                    </p>
+                                                    <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
+                                                        No purchase of drugs/medicines, supplies, diagnostics, and co-pay for professional fees by the member/patient.
+                                                    </p>
+                                                </div>
+                                            </label>
+
+                                            {/* Sub-fields for Enough Coverage */}
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 border-t border-emerald-100/50">
+                                                <FormInput
+                                                    label="Total Health Care Institution Fees"
+                                                    name="hciFeesEnough"
+                                                    type="number"
+                                                    value={formData.hciFeesEnough}
+                                                    onChange={handleChange}
+                                                    disabled={!formData.certifiedEnough}
+                                                />
+                                                <FormInput
+                                                    label="Total Professional Fees"
+                                                    name="pfFeesEnough"
+                                                    type="number"
+                                                    value={formData.pfFeesEnough}
+                                                    onChange={handleChange}
+                                                    disabled={!formData.certifiedEnough}
+                                                />
+                                                <FormInput
+                                                    label="Grand Total"
+                                                    name="grandTotalEnough"
+                                                    type="number"
+                                                    value={grandTotalEnough}
+                                                    onChange={() => {}}
+                                                    disabled={true}
+                                                    placeholder="Auto-computed"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-4 py-2">
+                                            <div className="flex-1 h-px bg-slate-200"></div>
+                                            <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">OR</span>
+                                            <div className="flex-1 h-px bg-slate-200"></div>
+                                        </div>
+
+                                        {/* Option 2: Completely Consumed or with Purchases */}
+                                        <div className="space-y-8">
+                                            <label className="flex items-start gap-5 cursor-pointer group p-6 bg-slate-50 rounded-2xl border border-slate-200">
+                                                <div className="relative flex items-center justify-center mt-1">
+                                                    <input
+                                                        type="checkbox"
+                                                        name="consumedPrior"
+                                                        checked={formData.consumedPrior}
+                                                        onChange={handleChange}
+                                                        disabled={formData.certifiedEnough}
+                                                        className="w-6 h-6 rounded border-slate-300 text-philhealth-green focus:ring-philhealth-green cursor-pointer transition-all disabled:opacity-30"
+                                                    />
+                                                </div>
+
+                                                <div className="flex-1">
+                                                    <p className="font-black text-slate-700 text-xs uppercase tracking-[0.05em] leading-relaxed">
+                                                        The benefit of the member/patient was completely consumed prior to co-pay OR the benefit of the member/patient is not completely consumed BUT with purchases/expenses for drugs/medicines, supplies, diagnostics and others
+                                                    </p>
+                                                </div>
+                                            </label>
+
+                                            {formData.consumedPrior && (
+                                                <motion.div
+                                                    initial={{ opacity: 0, y: -10 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    className="space-y-10 pl-11 border-l-2 border-slate-100"
+                                                >
+                                                    {/* Co-pay Subsection */}
+                                                    <div className="space-y-8">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-2 h-2 rounded-full bg-philhealth-yellow"></div>
+                                                            <h4 className="text-[11px] font-black text-slate-800 uppercase tracking-widest">
+                                                                1. The total co-pay for the following are:
+                                                            </h4>
+                                                        </div>
+
+                                                        {/* HCI Fees Sub-subsection */}
+                                                        <div className="p-6 bg-slate-50/50 rounded-xl border border-slate-100 space-y-6">
+                                                            <h5 className="text-[10px] font-bold text-philhealth-green uppercase tracking-widest flex items-center gap-2">
+                                                                <span className="w-5 h-5 rounded-full bg-philhealth-green text-white flex items-center justify-center text-[8px]">A</span>
+                                                                Total Health Care Institution Fees
+                                                            </h5>
+
+                                                            {/* Top Row: Main Charges */}
+                                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                                                <FormInput
+                                                                    label="Total Actual Charges"
+                                                                    subtitle="Based on Statement of Account (SOA)"
+                                                                    name="hciActualCharges"
+                                                                    type="number"
+                                                                    value={formData.hciActualCharges}
+                                                                    onChange={handleChange}
+                                                                />
+                                                                <FormInput
+                                                                    label="Amount after Discount"
+                                                                    subtitle="i.e., Senior Citizen/PWD"
+                                                                    name="hciDiscount"
+                                                                    type="number"
+                                                                    value={formData.hciDiscount}
+                                                                    onChange={handleChange}
+                                                                />
+                                                                <FormInput
+                                                                    label="PhilHealth Benefit"
+                                                                    name="hciPhilhealthBenefit"
+                                                                    type="number"
+                                                                    value={formData.hciPhilhealthBenefit}
+                                                                    onChange={handleChange}
+                                                                />
+                                                            </div>
+
+                                                            {/* Bottom Row: Deduction Subsection */}
+                                                            <div className="pt-4 border-t border-slate-100 space-y-3">
+                                                                <h6 className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                                                                    After PhilHealth Deduction
+                                                                </h6>
+
+                                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
+                                                                    {/* Left: Amount Input Field */}
+                                                                    <div className="md:col-span-1">
+                                                                        <FormInput
+                                                                            label="Amount"
+                                                                            name="hciAfterDeductionAmount"
+                                                                            type="number"
+                                                                            value={formData.hciAfterDeductionAmount}
+                                                                            onChange={handleChange}
+                                                                        />
+                                                                    </div>
+
+                                                                    {/* Right: Payer Checkboxes */}
+                                                                    <div className="md:col-span-2 pb-2">
+                                                                        <div className="flex flex-col gap-2">
+                                                                            <div>
+                                                                                <p className="text-[11px] font-bold text-slate-800 uppercase tracking-wider">
+                                                                                    Paid By:
+                                                                                </p>
+                                                                                <p className="text-[9px] text-slate-500 italic -mt-0.5">
+                                                                                    Check all that apply
+                                                                                </p>
+                                                                            </div>
+
+                                                                            {/* Checkboxes */}
+                                                                            <div className="flex flex-wrap items-center gap-6">
+                                                                                <CheckboxPayer
+                                                                                    name="hciDeductionPayers.member"
+                                                                                    checked={formData.hciDeductionPayers.member}
+                                                                                    onChange={handleChange}
+                                                                                    label="Member/Patient"
+                                                                                />
+                                                                                <CheckboxPayer
+                                                                                    name="hciDeductionPayers.hmo"
+                                                                                    checked={formData.hciDeductionPayers.hmo}
+                                                                                    onChange={handleChange}
+                                                                                    label="HMO"
+                                                                                />
+                                                                                <CheckboxPayer
+                                                                                    name="hciDeductionPayers.others"
+                                                                                    checked={formData.hciDeductionPayers.others}
+                                                                                    onChange={handleChange}
+                                                                                    label="Others (i.e., PCSO, Promissory note, etc.)"
+                                                                                />
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* PF Fees Sub-subsection */}
+                                                        <div className="p-6 bg-slate-50/50 rounded-xl border border-slate-100 space-y-6">
+                                                            <h5 className="text-[10px] font-bold text-philhealth-green uppercase tracking-widest flex items-center gap-2">
+                                                                <span className="w-5 h-5 rounded-full bg-philhealth-green text-white flex items-center justify-center text-[8px]">B</span>
+                                                                Total Professional Fees
+                                                            </h5>
+
+                                                            {/* Top Row: Main Charges */}
+                                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                                                <FormInput
+                                                                    label="Total Actual Charges"
+                                                                    subtitle="Based on Statement of Account (SOA)"
+                                                                    name="pfActualCharges"
+                                                                    type="number"
+                                                                    value={formData.pfActualCharges}
+                                                                    onChange={handleChange}
+                                                                />
+                                                                <FormInput
+                                                                    label="Amount after Discount"
+                                                                    subtitle="i.e., Senior Citizen/PWD"
+                                                                    name="pfDiscount"
+                                                                    type="number"
+                                                                    value={formData.pfDiscount}
+                                                                    onChange={handleChange}
+                                                                />
+                                                                <FormInput
+                                                                    label="PhilHealth Benefit"
+                                                                    name="pfPhilhealthBenefit"
+                                                                    type="number"
+                                                                    value={formData.pfPhilhealthBenefit}
+                                                                    onChange={handleChange}
+                                                                />
+                                                            </div>
+
+                                                            {/* Bottom Row: Deduction Subsection */}
+                                                            <div className="pt-4 border-t border-slate-100 space-y-3">
+                                                                <h6 className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                                                                    After PhilHealth Deduction
+                                                                </h6>
+
+                                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
+                                                                    {/* Left: Amount Input Field */}
+                                                                    <div className="md:col-span-1">
+                                                                        <FormInput
+                                                                            label="Amount"
+                                                                            name="pfAfterDeductionAmount"
+                                                                            type="number"
+                                                                            value={formData.pfAfterDeductionAmount}
+                                                                            onChange={handleChange}
+                                                                        />
+                                                                    </div>
+
+                                                                    {/* Right: Payer Checkboxes */}
+                                                                    <div className="md:col-span-2 pb-2">
+                                                                        <div className="flex flex-col gap-2">
+                                                                            <div>
+                                                                                <p className="text-[11px] font-bold text-slate-800 uppercase tracking-wider">
+                                                                                    Paid By:
+                                                                                </p>
+                                                                                <p className="text-[9px] text-slate-500 italic -mt-0.5">
+                                                                                    Check all that apply
+                                                                                </p>
+                                                                            </div>
+
+                                                                            {/* Checkboxes */}
+                                                                            <div className="flex flex-wrap items-center gap-6">
+                                                                                <CheckboxPayer
+                                                                                    name="hciDeductionPayers.member"
+                                                                                    checked={formData.hciDeductionPayers.member}
+                                                                                    onChange={handleChange}
+                                                                                    label="Member/Patient"
+                                                                                />
+                                                                                <CheckboxPayer
+                                                                                    name="hciDeductionPayers.hmo"
+                                                                                    checked={formData.hciDeductionPayers.hmo}
+                                                                                    onChange={handleChange}
+                                                                                    label="HMO"
+                                                                                />
+                                                                                <CheckboxPayer
+                                                                                    name="hciDeductionPayers.others"
+                                                                                    checked={formData.hciDeductionPayers.others}
+                                                                                    onChange={handleChange}
+                                                                                    label="Others (i.e., PCSO, Promissory note, etc.)"
+                                                                                />
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Purchases Subsection */}
+                                                    <div className="space-y-8">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-2 h-2 rounded-full bg-philhealth-yellow"></div>
+                                                            <h4 className="text-[11px] font-black text-slate-800 uppercase tracking-widest">
+                                                                2. Purchases/Expenses NOT included in the Health Care Institution Charges:
+                                                            </h4>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                                            {/* Drugs */}
+                                                            <div className="p-6 bg-slate-50/50 rounded-xl border border-slate-100 space-y-4">
+                                                                <div className="flex justify-between items-center">
+                                                                    <h6 className="text-[10px] font-bold text-slate-500 uppercase tracking-tight leading-relaxed">
+                                                                        Total cost of purchase/s for drugs/medicines and/or medical supplies bought by the patient/member within/outside the HCI during confinement
+                                                                    </h6>
+                                                                    {formData.drugsCostType !== 'none' && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handleChange({ target: { name: 'drugsCostType', value: 'none', type: 'radio' } })}
+                                                                            className="text-[9px] font-black text-philhealth-green hover:underline uppercase tracking-widest whitespace-nowrap ml-4"
+                                                                        >
+                                                                            Clear
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                                <div className="flex gap-6">
+                                                                    <RadioButton label="None" name="drugsCostType" value="none" current={formData.drugsCostType} onChange={handleChange} />
+                                                                    <RadioButton label="Total Amount" name="drugsCostType" value="amount" current={formData.drugsCostType} onChange={handleChange} />
+                                                                </div>
+                                                                {formData.drugsCostType === 'amount' && (
+                                                                    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
+                                                                        <FormInput label="Enter Amount" name="drugsAmount" type="number" value={formData.drugsAmount} onChange={handleChange} />
+                                                                    </motion.div>
+                                                                )}
+                                                            </div>
+
+                                                            {/* Diagnostic */}
+                                                            <div className="p-6 bg-slate-50/50 rounded-xl border border-slate-100 space-y-4">
+                                                                <div className="flex justify-between items-center">
+                                                                    <h6 className="text-[10px] font-bold text-slate-500 uppercase tracking-tight leading-relaxed">
+                                                                        Total cost of diagnostic/laboratory examinations paid by the patient/member done within/outside the HCI during confinement
+                                                                    </h6>
+                                                                    {formData.diagnosticCostType !== 'none' && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handleChange({ target: { name: 'diagnosticCostType', value: 'none', type: 'radio' } })}
+                                                                            className="text-[9px] font-black text-philhealth-green hover:underline uppercase tracking-widest whitespace-nowrap ml-4"
+                                                                        >
+                                                                            Clear
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                                <div className="flex gap-6">
+                                                                    <RadioButton label="None" name="diagnosticCostType" value="none" current={formData.diagnosticCostType} onChange={handleChange} />
+                                                                    <RadioButton label="Total Amount" name="diagnosticCostType" value="amount" current={formData.diagnosticCostType} onChange={handleChange} />
+                                                                </div>
+                                                                {formData.diagnosticCostType === 'amount' && (
+                                                                    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
+                                                                        <FormInput label="Enter Amount" name="diagnosticAmount" type="number" value={formData.diagnosticAmount} onChange={handleChange} />
+                                                                    </motion.div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </motion.div>
+                                            )}
+                                        </div>
+                                    </section>
+
+                                    {/* SECTION B */}
+                                    <section className="space-y-8 pt-8 border-t-2 border-slate-100">
+                                        <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest border-l-4 border-philhealth-green pl-4">
+                                            B. CONSENT TO ACCESS PATIENT RECORD/S
+                                        </h3>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                            <FormInput
+                                                label="Name of Member/Patient/Authorized Representative"
+                                                name="representativeName"
+                                                value={formData.representativeName}
+                                                onChange={handleChange}
+                                            />
+                                            <FormInput
+                                                label="Date Signed"
+                                                name="representativeDateSigned"
+                                                type="date"
+                                                value={formData.representativeDateSigned}
+                                                onChange={handleChange}
+                                            />
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                            <div className="space-y-4 p-6 bg-slate-50 rounded-xl">
+                                                <div className="flex justify-between items-center">
+                                                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                                                        Relationship of the representative
+                                                    </label>
+                                                    {formData.representativeRelationship && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleChange({ target: { name: 'representativeRelationship', value: '', type: 'radio' } })}
+                                                            className="text-[9px] font-black text-philhealth-green hover:underline uppercase tracking-widest"
+                                                        >
+                                                            Clear
+                                                        </button>
+                                                    )}
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <RadioButton label="Spouse" name="representativeRelationship" value="Spouse" current={formData.representativeRelationship} onChange={handleChange} />
+                                                    <RadioButton label="Sibling" name="representativeRelationship" value="Sibling" current={formData.representativeRelationship} onChange={handleChange} />
+                                                    <RadioButton label="Child" name="representativeRelationship" value="Child" current={formData.representativeRelationship} onChange={handleChange} />
+                                                    <RadioButton label="Parent" name="representativeRelationship" value="Parent" current={formData.representativeRelationship} onChange={handleChange} />
+                                                    <RadioButton label="Others" name="representativeRelationship" value="Others" current={formData.representativeRelationship} onChange={handleChange} />
+                                                </div>
+                                                {formData.representativeRelationship === 'Others' && (
+                                                    <FormInput label="Specify Relationship" name="representativeRelationshipSpecify" value={formData.representativeRelationshipSpecify} onChange={handleChange} />
+                                                )}
+                                            </div>
+
+                                            <div className="space-y-4 p-6 bg-slate-50 rounded-xl">
+                                                <div className="flex justify-between items-center">
+                                                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                                                        Reason for signing on behalf
+                                                    </label>
+                                                    {formData.behalfReason && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleChange({ target: { name: 'behalfReason', value: '', type: 'radio' } })}
+                                                            className="text-[9px] font-black text-philhealth-green hover:underline uppercase tracking-widest"
+                                                        >
+                                                            Clear
+                                                        </button>
+                                                    )}
+                                                </div>
+                                                <div className="space-y-3">
+                                                    <RadioButton label="Patient is Incapacitated" name="behalfReason" value="Incapacitated" current={formData.behalfReason} onChange={handleChange} />
+                                                    <RadioButton label="Other Reasons" name="behalfReason" value="Others" current={formData.behalfReason} onChange={handleChange} />
+                                                </div>
+                                                {formData.behalfReason === 'Others' && (
+                                                    <FormInput label="Specify Reason" name="behalfReasonSpecify" value={formData.behalfReasonSpecify} onChange={handleChange} />
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* CONSENT CHECKBOXES */}
+                                        <div className="space-y-4 p-8 bg-[#f0f4f0] border-2 border-philhealth-green/10 rounded-2xl border-dashed">
+                                            <label className="flex items-start gap-5 cursor-pointer group">
+                                                <div className="relative flex items-center justify-center mt-1">
+                                                    <input
+                                                        type="checkbox"
+                                                        name="consentMedicalRecords"
+                                                        checked={formData.consentMedicalRecords}
+                                                        onChange={handleChange}
+                                                        className="w-6 h-6 rounded border-slate-300 text-philhealth-green focus:ring-philhealth-green cursor-pointer transition-all"
+                                                    />
+                                                </div>
+                                                <div className="flex-1">
+                                                    <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
+                                                        I hereby consent to the submission and examination of the patient’s pertinent medical records for the purpose of verifying the veracity of this claim to effect efficient processing of benefit payment.
+                                                    </p>
+                                                </div>
+                                            </label>
+
+                                            <div className="h-px bg-philhealth-green/10 mx-2"></div>
+
+                                            <label className="flex items-start gap-5 cursor-pointer group">
+                                                <div className="relative flex items-center justify-center mt-1">
+                                                    <input
+                                                        type="checkbox"
+                                                        name="consentLiabilityFree"
+                                                        checked={formData.consentLiabilityFree}
+                                                        onChange={handleChange}
+                                                        className="w-6 h-6 rounded border-slate-300 text-philhealth-green focus:ring-philhealth-green cursor-pointer transition-all"
+                                                    />
+                                                </div>
+                                                <div className="flex-1">
+                                                    <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
+                                                        I hereby hold PhilHealth or any of its officers, employees and/or representatives free from any and all legal liabilities relative to the herein-mentioned consent which I have voluntarily and willingly given in connection with this claim for reimbursement before PhilHealth.
+                                                    </p>
+                                                </div>
+                                            </label>
+                                        </div>
+                                    </section>
                                 </div>
                             )}
+                            {/* ---------------- !!!!! DON'T CHANGE THE PART ABOVE !!!!! ---------------- */}
 
+                            {/* ---------------- !!!!! DON'T CHANGE THE PART BELOW !!!!! ---------------- */}
                             {/* ---------------- PART IV HERE ---------------- */}
                             {currentStep === 4 && (
                                 <div className="space-y-8">
-                                    <FormInput
-                                        label="Accreditation Number"
-                                        name="accreditation_number"
-                                        value={formData.accreditation_number}
-                                        onChange={handleChange}
-                                    />
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                        <FormInput
+                                            label="Name of Authorized HCI Representative"
+                                            name="hci_name"
+                                            value={formData.hci_name}
+                                            onChange={handleChange}
+                                        />
 
-                                    <FormInput
-                                        label="Remarks"
-                                        name="remarks"
-                                        type="textarea"
-                                        value={formData.remarks}
-                                        onChange={handleChange}
-                                    />
+                                        <FormInput
+                                            label="Official Capacity/Designation"
+                                            name="designation"
+                                            value={formData.designation}
+                                            onChange={handleChange}
+                                        />
+                                    </div>
 
-                                    {/* Styled Certification Block */}
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                                            Date Signed
+                                        </label>
+
+                                        <input
+                                            type="date"
+                                            name="date_signed"
+                                            value={formData.date_signed}
+                                            onChange={handleChange}
+                                            className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-philhealth-green/20 outline-none"
+                                        />
+                                    </div>
+
                                     <div className="p-8 bg-[#f0f4f0] border-2 border-philhealth-green/10 rounded-2xl border-dashed">
                                         <label className="flex items-start gap-5 cursor-pointer group">
-                                            <div className="relative flex items-center justify-center">
+                                            <div className="relative flex items-center justify-center mt-1">
                                                 <input
                                                     type="checkbox"
-                                                    name="certified"
-                                                    checked={formData.certified}
+                                                    name="finalCertification"
+                                                    checked={formData.finalCertification}
                                                     onChange={handleChange}
                                                     className="w-6 h-6 rounded border-slate-300 text-philhealth-green focus:ring-philhealth-green cursor-pointer transition-all"
                                                 />
@@ -288,6 +958,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                     </div>
                                 </div>
                             )}
+                            {/* ---------------- !!!!! DON'T CHANGE THE PART ABOVE !!!!! ---------------- */}
                         </motion.div>
                     </AnimatePresence>
                 </div>
@@ -304,12 +975,16 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
 
                     {currentStep === 4 ? (
                         <button
-                            onClick={() => formData.certified && onSubmit(formData)}
-                            disabled={!formData.certified}
+                            onClick={() => {
+                                if (formData.finalCertification) {
+                                    onSubmit({ ...formData, grandTotalEnough });
+                                }
+                            }}
+                            disabled={!formData.finalCertification || !isStepValid()}
                             className={`px-10 py-3.5 rounded-xl font-black text-xs uppercase tracking-[0.15em] flex items-center gap-3 transition-all shadow-xl ${
-                                formData.certified
+                                formData.finalCertification && isStepValid()
                                     ? 'bg-philhealth-yellow text-philhealth-green hover:shadow-philhealth-yellow/20 active:scale-95'
-                                    : 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-50'
+                                    : 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-50 shadow-none'
                             }`}
                             id="submit-form-btn"
                         >
@@ -322,8 +997,8 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                             disabled={!isStepValid()}
                             className={`px-10 py-3.5 rounded-xl font-black text-xs uppercase tracking-[0.15em] flex items-center gap-3 transition-all shadow-xl ${
                                 isStepValid()
-                                    ? 'bg-philhealth-green text-white hover:bg-philhealth-green-dark hover:shadow-philhealth-green/30'
-                                    : 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-50'
+                                    ? 'bg-philhealth-green text-white hover:bg-philhealth-green-dark hover:shadow-philhealth-green/30 active:scale-95'
+                                    : 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-50 shadow-none'
                             }`}
                             id="next-btn"
                         >
@@ -337,40 +1012,72 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
     );
 }
 
-function FormInput({
-                       label,
-                       name,
-                       type = 'text',
-                       value,
-                       onChange,
-                       placeholder,
-                   }) {
-    const base = 'w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold';
+function FormInput({label, name, type = 'text', value, onChange, placeholder = '', disabled = false, subtitle = ''}) {
+    const base = 'w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-philhealth-green/20 outline-none transition-all disabled:opacity-50 disabled:bg-slate-100 disabled:cursor-not-allowed';
 
     return (
         <div className="space-y-2">
-            <label className="text-[10px] font-black uppercase text-slate-400">
+            <label className="text-[10px] font-black uppercase text-slate-900 tracking-tight">
                 {label}
             </label>
+            {subtitle && (
+                <p className="text-[9px] text-slate-900 italic -mt-1">{subtitle}</p>
+            )}
 
             {type === 'textarea' ? (
                 <textarea
                     name={name}
-                    value={value}
+                    value={value || ''}
                     onChange={onChange}
                     placeholder={placeholder}
-                    className={base}
+                    disabled={disabled}
+                    className={`${base} min-h-25`}
                 />
             ) : (
                 <input
                     name={name}
                     type={type}
-                    value={value}
+                    value={value || ''}
                     onChange={onChange}
                     placeholder={placeholder}
+                    disabled={disabled}
                     className={base}
                 />
             )}
         </div>
+    );
+}
+
+function CheckboxPayer({ label, name, checked, onChange }) {
+    return (
+        <label className="flex items-center gap-2 cursor-pointer group">
+            <input
+                type="checkbox"
+                name={name}
+                checked={checked}
+                onChange={onChange}
+                className="w-4 h-4 rounded border-slate-300 text-philhealth-green focus:ring-philhealth-green cursor-pointer"
+            />
+            <span className="text-[10px] font-bold text-slate-600 group-hover:text-philhealth-green transition-colors">{label}</span>
+        </label>
+    );
+}
+
+function RadioButton({ label, name, value, current, onChange }) {
+    const isSelected = current === value;
+    return (
+        <label className={`flex items-center gap-2 cursor-pointer group px-4 py-2 rounded-lg border transition-all ${
+            isSelected ? 'bg-philhealth-green border-philhealth-green text-white' : 'bg-white border-slate-200 text-slate-600 hover:border-philhealth-green/30'
+        }`}>
+            <input
+                type="radio"
+                name={name}
+                value={value}
+                checked={isSelected}
+                onChange={onChange}
+                className="hidden"
+            />
+            <span className="text-[10px] font-black uppercase tracking-wider">{label}</span>
+        </label>
     );
 }

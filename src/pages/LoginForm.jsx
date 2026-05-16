@@ -160,13 +160,13 @@ export default function LoginForm({ onLogin, isLoading }) {
                 {/* Footer Brand */}
                 <div className="mt-12 flex justify-center items-center gap-6 opacity-30">
                     <p className="text-[9px] font-black text-slate-500 uppercase tracking-[0.25em]">
-                        HI 191 Capstone Project - MAY 2026
+                        HI 191 Capstone Project
                     </p>
 
                     <div className="h-3 w-[1px] bg-slate-400" />
 
                     <p className="text-[9px] font-black text-slate-500 uppercase tracking-[0.25em]">
-                        Dev: Dimaculangan, Montiel, Sigarra
+                        MAY 2026
                     </p>
                 </div>
             </motion.div>
