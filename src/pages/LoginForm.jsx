@@ -1,17 +1,44 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { ShieldCheck, ArrowRight } from 'lucide-react';
+import {ShieldCheck, ArrowRight, AlertCircle} from 'lucide-react';
+import { supabase } from "../lib/supabase.js";
 
-export default function LoginForm({ onLogin, isLoading }) {
+export default function LoginForm({ onLogin, isLoading: externalLoading }) {
     const [email, setEmail] = React.useState('');
     const [password, setPassword] = React.useState('');
+    const [error, setError] = React.useState(null);
+    const [internalLoading, setInternalLoading] = React.useState(false);
 
-    const handleSubmit = (e) => {
+    const isLoading = externalLoading || internalLoading;
+
+    const handleSubmit = async (e) => {
         e.preventDefault();
+        setError(null);
+        setInternalLoading(true);
 
-        if (email && password) {
-            onLogin(email);
+        try {
+            const {data, error: authError} = await supabase.auth.signInWithPassword({
+                email: email,
+                password: password,
+            });
+
+            if (authError) {
+                throw authError;
+            }
+
+            if (data?.user) {
+                onLogin(data.user);
+            }
+
+        } catch (err) {
+            setError(err.message || 'An error occurred during authentication.');
+        } finally {
+            setInternalLoading(false);
         }
+
+        // if (email && password) {
+        //     onLogin(email);
+        // }
     };
 
     return (
@@ -72,9 +99,21 @@ export default function LoginForm({ onLogin, isLoading }) {
                             </p>
                         </div>
 
+                        {/* Error Alert Box */}
+                        {error && (
+                            <motion.div
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="mb-6 p-4 bg-red-50 border-2 border-red-100 rounded-2xl flex items-center gap-3 text-red-700 text-xs font-bold"
+                            >
+                                <AlertCircle size={18} className="shrink-0" />
+                                <span>{error}</span>
+                            </motion.div>
+                        )}
+
                         <form onSubmit={handleSubmit} className="space-y-6">
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">
+                                <label className="text-[10px] font-black text-slate-900 uppercase tracking-[0.2em] ml-1">
                                     Email
                                 </label>
 
@@ -86,13 +125,14 @@ export default function LoginForm({ onLogin, isLoading }) {
                                         className="w-full px-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-xs font-bold text-slate-800 focus:ring-0 focus:border-philhealth-green outline-none transition-all placeholder:text-slate-300 group-hover:border-slate-200"
                                         value={email}
                                         onChange={(e) => setEmail(e.target.value)}
+                                        disabled={isLoading}
                                     />
                                 </div>
                             </div>
 
                             <div className="space-y-2">
                                 <div className="flex justify-between items-center px-1">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
+                                    <label className="text-[10px] font-black text-slate-900 uppercase tracking-[0.2em]">
                                         Password
                                     </label>
                                 </div>
@@ -104,6 +144,7 @@ export default function LoginForm({ onLogin, isLoading }) {
                                     className="w-full px-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-xs font-bold text-slate-800 focus:ring-0 focus:border-philhealth-green outline-none transition-all placeholder:text-slate-300 hover:border-slate-200"
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
+                                    disabled={isLoading}
                                 />
                             </div>
 
@@ -113,9 +154,7 @@ export default function LoginForm({ onLogin, isLoading }) {
                                     disabled={isLoading}
                                     className="w-full bg-philhealth-green hover:bg-philhealth-green-dark text-white font-black text-xs uppercase tracking-[0.2em] py-5 rounded-2xl transition-all shadow-2xl shadow-philhealth-green/20 flex items-center justify-center gap-3 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed group"
                                 >
-                                    {isLoading
-                                        ? 'Verifying Identity...'
-                                        : 'Confirm Authentication'}
+                                    {isLoading ? 'Verifying Identity...' : 'Login'}
 
                                     {!isLoading && (
                                         <ArrowRight
@@ -123,15 +162,6 @@ export default function LoginForm({ onLogin, isLoading }) {
                                             className="group-hover:translate-x-1 transition-transform"
                                         />
                                     )}
-                                </button>
-
-                                <button
-                                    type="button"
-                                    onClick={() => onLogin('demo@philhealth.gov.ph')}
-                                    disabled={isLoading}
-                                    className="w-full bg-white border-2 border-slate-100 hover:border-philhealth-yellow text-slate-600 font-black text-[10px] uppercase tracking-[0.2em] py-4 rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
-                                >
-                                    Quick Demo Access
                                 </button>
                             </div>
                         </form>

@@ -1,6 +1,5 @@
 import 'react';
-// import { LogOut, User, FileText, LayoutDashboard, Menu, X } from 'lucide-react';
-// import { motion, AnimatePresence } from 'motion/react';
+import { LogOut } from 'lucide-react';
 
 export default function Layout({ children, userEmail, onLogout }) {
     return (
@@ -41,9 +40,13 @@ export default function Layout({ children, userEmail, onLogout }) {
                                 {userEmail || 'Physician'}
                             </p>
 
-                            <p className="text-philhealth-yellow text-[10px] uppercase font-bold tracking-tighter">
-                                Accreditation: #82-192-04
-                            </p>
+                            <button
+                                onClick={onLogout}
+                                className="text-philhealth-yellow hover:text-white text-[10px] uppercase font-black tracking-wider flex items-center gap-1 ml-auto bg-transparent border-none cursor-pointer transition-colors mt-0.5 group"
+                            >
+                                <LogOut size={10} className="group-hover:translate-x-0.5 transition-transform" />
+                                Sign Out Account
+                            </button>
                         </div>
 
                         <div className="relative group">
@@ -84,18 +87,3 @@ export default function Layout({ children, userEmail, onLogout }) {
         </div>
     );
 }
-
-// function SidebarItem({ icon, label, active = false }) {
-//     return (
-//         <button
-//             className={`w-full flex items-center gap-3 p-3 rounded-lg text-sm font-medium transition-all ${
-//                 active
-//                     ? 'bg-philhealth-yellow text-philhealth-green shadow-lg shadow-black/10'
-//                     : 'hover:bg-philhealth-green-dark text-white/70 hover:text-white'
-//             }`}
-//         >
-//             {icon}
-//             {label}
-//         </button>
-//     );
-// }

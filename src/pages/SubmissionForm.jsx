@@ -10,103 +10,7 @@ const STEPS = [
     { id: 4, title: 'Certification of Consumption of Health Care Institution', icon: <CheckSquare size={20} /> },
 ];
 
-export default function App() {
-    const handleSupabaseSubmit = async (data) => {
-        try {
-            const parseNum = (val) => val ? parseFloat(val) : null;
-            const parseDate = (val) => val ? val : null;
-
-            // INSERTING PART 3 INPUTS
-            const { error: part3Error } = await supabase
-                .from('Part3_Consumption_Consent')
-                .insert([
-                    {
-                        is_benefit_enough: data.certifiedEnough,
-                        enough_hci_fees: parseNum(data.hciFeesEnough),
-                        enough_pf_fees: parseNum(data.pfFeesEnough),
-                        enough_grand_total: parseNum(data.grandTotalEnough),
-
-                        is_benefit_consumed_or_with_purchases: data.consumedPrior,
-
-                        hci_actual_charges: parseNum(data.hciActualCharges),
-                        hci_discount_amount: parseNum(data.hciDiscount),
-                        hci_philhealth_benefit: parseNum(data.hciPhilhealthBenefit),
-                        hci_copay_amount: parseNum(data.hciAfterDeductionAmount),
-                        hci_paid_by_member: data.hciDeductionPayers.member,
-                        hci_paid_by_hmo: data.hciDeductionPayers.hmo,
-                        hci_paid_by_others: data.hciDeductionPayers.others,
-
-                        pf_actual_charges: parseNum(data.pfActualCharges),
-                        pf_discount_amount: parseNum(data.pfDiscount),
-                        pf_philhealth_benefit: parseNum(data.pfPhilhealthBenefit),
-                        pf_copay_amount: parseNum(data.pfAfterDeductionAmount),
-                        pf_paid_by_member: data.pfDeductionPayers.member,
-                        pf_paid_by_hmo: data.pfDeductionPayers.hmo,
-                        pf_paid_by_others: data.pfDeductionPayers.others,
-
-                        drugs_cost_type: data.drugsCostType,
-                        drugs_amount: parseNum(data.drugsAmount),
-                        diagnostic_cost_type: data.diagnosticCostType,
-                        diagnostic_amount: parseNum(data.diagnosticAmount),
-
-                        representative_name: data.representativeName,
-                        consent_date_signed: parseDate(data.representativeDateSigned),
-                        representative_relationship: data.representativeRelationship,
-                        representative_relationship_others: data.representativeRelationshipSpecify,
-                        signing_behalf_reason: data.behalfReason,
-                        signing_behalf_reason_others: data.behalfReasonSpecify,
-
-                        consent_medical_records: data.consentMedicalRecords,
-                        consent_liability_free: data.consentLiabilityFree
-                    }
-                ]);
-
-            if (part3Error) throw part3Error;
-
-            // --- INSERT PART 4 ---
-            const { error: part4Error } = await supabase
-                .from('Part4_Certification')
-                .insert([
-                    {
-                        hci_name: data.hci_name,
-                        designation: data.designation,
-                        date: parseDate(data.date_signed),
-                        is_certified: data.finalCertification
-                    }
-                ]);
-
-            if (part4Error) throw part4Error;
-
-            alert('Form submitted successfully to Supabase!');
-            window.location.reload();
-        } catch (error) {
-            console.error('Supabase Insert Error:', error);
-            alert(`Error saving to database: ${error.message}`);
-        }
-    }
-
-    return (
-        <div className="min-h-screen bg-slate-100 py-12 px-4">
-            <SubmissionForm
-                onSubmit={(data) => {
-                    console.log('Form Submitted:', data);
-                    alert('Form submitted successfully! Check console for data.');
-                    window.location.reload();
-                }}
-
-                // --------- DON'T UNCOMMENT THIS LINE YET
-                // onSubmit={handleSupabaseSubmit}
-                onCancel={() => {
-                    if (confirm('Are you sure you want to cancel? All progress will be lost.')) {
-                        window.location.reload();
-                    }
-                }}
-            />
-        </div>
-    );
-}
-
-function SubmissionForm({ onSubmit, onCancel }) {
+export default function SubmissionForm({ onSubmit, onCancel }) {
     const [currentStep, setCurrentStep] = React.useState(1);
 
     const [formData, setFormData] = React.useState({
@@ -129,34 +33,26 @@ function SubmissionForm({ onSubmit, onCancel }) {
         certifiedEnough: false,
         hciFeesEnough: '',
         pfFeesEnough: '',
-
         consumedPrior: false,
+
         // Co-pay HCI
         hciActualCharges: '',
         hciDiscount: '',
         hciPhilhealthBenefit: '',
         hciAfterDeductionAmount: '',
-        hciDeductionPayers: {
-            member: false,
-            hmo: false,
-            others: false
-        },
+        hciDeductionPayers: { member: false, hmo: false, others: false },
 
         // Co-pay PF
         pfActualCharges: '',
         pfDiscount: '',
         pfPhilhealthBenefit: '',
         pfAfterDeductionAmount: '',
-        pfDeductionPayers: {
-            member: false,
-            hmo: false,
-            others: false
-        },
+        pfDeductionPayers: { member: false, hmo: false, others: false },
 
         // Purchases
-        drugsCostType: 'none', // 'none' or 'amount'
+        drugsCostType: 'none',
         drugsAmount: '',
-        diagnosticCostType: 'none', // 'none' or 'amount'
+        diagnosticCostType: 'none',
         diagnosticAmount: '',
 
         // Part III - Section B
@@ -177,7 +73,6 @@ function SubmissionForm({ onSubmit, onCancel }) {
         // ---------------- !!!!! DON'T CHANGE THE PART ABOVE !!!!! ---------------- //
     });
 
-    // Compute Grand Total for Section A (PhilHealth enough)
     const grandTotalEnough = formData.certifiedEnough
         ? ((parseFloat(formData.hciFeesEnough) || 0) + (parseFloat(formData.pfFeesEnough) || 0)).toString()
         : '';
@@ -186,73 +81,33 @@ function SubmissionForm({ onSubmit, onCancel }) {
         const { name, value, type, checked } = e.target;
 
         if (type === 'checkbox') {
-            // 1. Clear Section A fields if "Enough Coverage" is unchecked
             if (name === 'certifiedEnough' && !checked) {
-                setFormData(prev => ({
-                    ...prev,
-                    certifiedEnough: false,
-                    hciFeesEnough: '',
-                    pfFeesEnough: '',
-                }));
+                setFormData(prev => ({ ...prev, certifiedEnough: false, hciFeesEnough: '', pfFeesEnough: '' }));
             }
-            // 2. Clear Section A Co-pay & Purchases if "Consumed Prior" is unchecked
             else if (name === 'consumedPrior' && !checked) {
                 setFormData(prev => ({
                     ...prev,
                     consumedPrior: false,
-                    hciActualCharges: '',
-                    hciDiscount: '',
-                    hciPhilhealthBenefit: '',
-                    hciAfterDeductionAmount: '',
+                    hciActualCharges: '', hciDiscount: '', hciPhilhealthBenefit: '', hciAfterDeductionAmount: '',
                     hciDeductionPayers: { member: false, hmo: false, others: false },
-                    pfActualCharges: '',
-                    pfDiscount: '',
-                    pfPhilhealthBenefit: '',
-                    pfAfterDeductionAmount: '',
+                    pfActualCharges: '', pfDiscount: '', pfPhilhealthBenefit: '', pfAfterDeductionAmount: '',
                     pfDeductionPayers: { member: false, hmo: false, others: false },
-                    drugsCostType: 'none',
-                    drugsAmount: '',
-                    diagnosticCostType: 'none',
-                    diagnosticAmount: ''
+                    drugsCostType: 'none', drugsAmount: '', diagnosticCostType: 'none', diagnosticAmount: ''
                 }));
             }
-            // 3. Handle nested payers (hciDeductionPayers.member, etc.)
             else if (name.includes('.')) {
                 const [parent, child] = name.split('.');
-                setFormData(prev => ({
-                    ...prev,
-                    [parent]: {
-                        ...prev[parent],
-                        [child]: checked
-                    }
-                }));
+                setFormData(prev => ({ ...prev, [parent]: { ...prev[parent], [child]: checked } }));
             } else {
-                setFormData(prev => ({
-                    ...prev,
-                    [name]: checked
-                }));
+                setFormData(prev => ({ ...prev, [name]: checked }));
             }
         } else {
-            // Handle clearing dependent text fields for radio buttons/selects
             setFormData(prev => {
                 const newData = { ...prev, [name]: value };
-
-                // Clear Specification if relationship is not "Others"
-                if (name === 'representativeRelationship' && value !== 'Others') {
-                    newData.representativeRelationshipSpecify = '';
-                }
-                // Clear Reason Spec if reason is not "Others"
-                if (name === 'behalfReason' && value !== 'Others') {
-                    newData.behalfReasonSpecify = '';
-                }
-                // Clear Amount if Cost Type is "None"
-                if (name === 'drugsCostType' && value === 'none') {
-                    newData.drugsAmount = '';
-                }
-                if (name === 'diagnosticCostType' && value === 'none') {
-                    newData.diagnosticAmount = '';
-                }
-
+                if (name === 'representativeRelationship' && value !== 'Others') newData.representativeRelationshipSpecify = '';
+                if (name === 'behalfReason' && value !== 'Others') newData.behalfReasonSpecify = '';
+                if (name === 'drugsCostType' && value === 'none') newData.drugsAmount = '';
+                if (name === 'diagnosticCostType' && value === 'none') newData.diagnosticAmount = '';
                 return newData;
             });
         }
@@ -264,7 +119,6 @@ function SubmissionForm({ onSubmit, onCancel }) {
     const isStepValid = () => {
         if (currentStep === 1) return formData.patient_name && formData.philhealth_id;
         if (currentStep === 2) return formData.diagnosis && formData.icd10_code;
-        if (currentStep === 3) return true; // Complex logic can be added
         if (currentStep === 4) return formData.finalCertification && formData.hci_name;
         return true;
     };
@@ -690,20 +544,20 @@ function SubmissionForm({ onSubmit, onCancel }) {
                                                                             {/* Checkboxes */}
                                                                             <div className="flex flex-wrap items-center gap-6">
                                                                                 <CheckboxPayer
-                                                                                    name="hciDeductionPayers.member"
-                                                                                    checked={formData.hciDeductionPayers.member}
+                                                                                    name="pfDeductionPayers.member"
+                                                                                    checked={formData.pfDeductionPayers.member}
                                                                                     onChange={handleChange}
                                                                                     label="Member/Patient"
                                                                                 />
                                                                                 <CheckboxPayer
-                                                                                    name="hciDeductionPayers.hmo"
-                                                                                    checked={formData.hciDeductionPayers.hmo}
+                                                                                    name="pfDeductionPayers.hmo"
+                                                                                    checked={formData.pfDeductionPayers.hmo}
                                                                                     onChange={handleChange}
                                                                                     label="HMO"
                                                                                 />
                                                                                 <CheckboxPayer
-                                                                                    name="hciDeductionPayers.others"
-                                                                                    checked={formData.hciDeductionPayers.others}
+                                                                                    name="pfDeductionPayers.others"
+                                                                                    checked={formData.pfDeductionPayers.others}
                                                                                     onChange={handleChange}
                                                                                     label="Others (i.e., PCSO, Promissory note, etc.)"
                                                                                 />

@@ -5,6 +5,7 @@ import LoginForm from './pages/LoginForm.jsx';
 import StatusTable from "./pages/StatusTable.jsx";
 import SubmissionForm from "./pages/SubmissionForm.jsx";
 import { Plus } from 'lucide-react';
+import {supabase} from "./lib/supabase.js";
 
 // Mock data
 const MOCK_FORMS = [
@@ -56,13 +57,16 @@ export default function App() {
     rejected: forms.filter((f) => f.status === 'Rejected').length,
   };
 
-  const handleLogin = (email) => {
+  const handleLogin = (supabaseUser) => {
     setIsLoading(true);
 
-    setTimeout(() => {
-      setUser({ email });
-      setIsLoading(false);
-    }, 800);
+    // If it's a demo bypass string, use it directly. Otherwise, grab the email property.
+    const emailAddress = typeof supabaseUser === 'string'
+        ? supabaseUser
+        : supabaseUser?.email;
+
+    setUser({ email: emailAddress });
+    setIsLoading(false);
   };
 
   const handleLogout = () => {
@@ -73,6 +77,76 @@ export default function App() {
   const handleNewSubmission = () => setView('form');
 
   const handleCancelSubmission = () => setView('dashboard');
+
+  // FOR SUPABASE SUBMISSION - PART I-IV
+  const handleSupabaseSubmit = async (data) => {
+    try {
+      setIsLoading(true);
+      const parseNum = (val) => val ? parseFloat(val) : null;
+      const parseDate = (val) => val ? val : null;
+
+      const { error: part3Error } = await supabase
+          .from('Part3_Consumption_Consent')
+          .insert([
+            {
+              is_benefit_enough: data.certifiedEnough,
+              enough_hci_fees: parseNum(data.hciFeesEnough),
+              enough_pf_fees: parseNum(data.pfFeesEnough),
+              enough_grand_total: parseNum(data.grandTotalEnough),
+              is_benefit_consumed_or_with_purchases: data.consumedPrior,
+              hci_actual_charges: parseNum(data.hciActualCharges),
+              hci_discount_amount: parseNum(data.hciDiscount),
+              hci_philhealth_benefit: parseNum(data.hciPhilhealthBenefit),
+              hci_copay_amount: parseNum(data.hciAfterDeductionAmount),
+              hci_paid_by_member: data.hciDeductionPayers.member,
+              hci_paid_by_hmo: data.hciDeductionPayers.hmo,
+              hci_paid_by_others: data.hciDeductionPayers.others,
+              pf_actual_charges: parseNum(data.pfActualCharges),
+              pf_discount_amount: parseNum(data.pfDiscount),
+              pf_philhealth_benefit: parseNum(data.pfPhilhealthBenefit),
+              pf_copay_amount: parseNum(data.pfAfterDeductionAmount),
+              pf_paid_by_member: data.pfDeductionPayers.member,
+              pf_paid_by_hmo: data.pfDeductionPayers.hmo,
+              pf_paid_by_others: data.pfDeductionPayers.others,
+              drugs_cost_type: data.drugsCostType,
+              drugs_amount: parseNum(data.drugsAmount),
+              diagnostic_cost_type: data.diagnosticCostType,
+              diagnostic_amount: parseNum(data.diagnosticAmount),
+              representative_name: data.representativeName,
+              consent_date_signed: parseDate(data.representativeDateSigned),
+              representative_relationship: data.representativeRelationship,
+              representative_relationship_others: data.representativeRelationshipSpecify,
+              signing_behalf_reason: data.behalfReason,
+              signing_behalf_reason_others: data.behalfReasonSpecify,
+              consent_medical_records: data.consentMedicalRecords,
+              consent_liability_free: data.consentLiabilityFree
+            }
+          ]);
+
+      if (part3Error) throw part3Error;
+
+      const { error: part4Error } = await supabase
+          .from('Part4_Certification')
+          .insert([
+            {
+              hci_name: data.hci_name,
+              designation: data.designation,
+              date: parseDate(data.date_signed),
+              is_certified: data.finalCertification
+            }
+          ]);
+
+      if (part4Error) throw part4Error;
+
+      alert('Form submitted successfully to Supabase!');
+      setView('dashboard');
+    } catch (error) {
+      console.error('Supabase Insert Error:', error);
+      alert(`Error saving to database: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleSubmitForm = (data) => {
     const newForm = {
@@ -92,15 +166,7 @@ export default function App() {
     setView('dashboard');
   };
 
-  // 🔐 LOGIN SCREEN
-  if (!user) {
-    return (
-        <LoginForm
-            onLogin={handleLogin}
-            isLoading={isLoading}
-        />
-    );
-  }
+  if (!user) return <LoginForm onLogin={handleLogin} isLoading={isLoading} />;
 
   return (
       <Layout
@@ -182,7 +248,12 @@ export default function App() {
               >
                 <SubmissionForm
                     onSubmit={handleSubmitForm}
-                    onCancel={handleCancelSubmission}
+                    // onSubmit={handleSupabaseSubmit} <- UNCOMMENT IF SUPABASE CONNECTION DONE FOR PART 1 AND PART 2
+                    onCancel={() => {
+                      if (confirm('Are you sure you want to cancel? All progress will be lost.')) {
+                        handleCancelSubmission();
+                      }
+                    }}
                 />
               </motion.div>
           )}
