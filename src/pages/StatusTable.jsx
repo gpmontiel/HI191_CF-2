@@ -1,11 +1,11 @@
-import React from 'react';
+import 'react';
 import { FileText } from 'lucide-react';
 
-export default function StatusTable({ forms, onView, isLoading }) {
+export default function StatusTable({ forms = [], onView, isLoading }) {
     return (
         <section className="flex-1 flex flex-col bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden min-h-[500px]">
 
-            {/* Table Header (SIMPLIFIED) */}
+            {/* Table Header */}
             <div className="px-6 py-4 border-b border-slate-100 bg-slate-50">
                 <h2 className="font-bold text-philhealth-green">
                     Form Status Tracker
@@ -29,14 +29,14 @@ export default function StatusTable({ forms, onView, isLoading }) {
                     {isLoading ? (
                         Array.from({ length: 4 }).map((_, i) => (
                             <tr key={i} className="animate-pulse">
-                                <td colSpan={6} className="px-6 py-4">
+                                <td colSpan={5} className="px-6 py-4">
                                     <div className="h-8 bg-slate-50 rounded w-full" />
                                 </td>
                             </tr>
                         ))
                     ) : forms.length === 0 ? (
                         <tr>
-                            <td colSpan={6} className="px-6 py-20 text-center">
+                            <td colSpan={5} className="px-6 py-20 text-center">
                                 <div className="flex flex-col items-center opacity-30">
                                     <FileText size={64} strokeWidth={1} />
                                     <p className="mt-4 font-bold text-sm">
@@ -48,11 +48,11 @@ export default function StatusTable({ forms, onView, isLoading }) {
                     ) : (
                         forms.map((form) => (
                             <tr
-                                key={form.id}
+                                key={form.id} // Uses matched cf2_id passed from wrapper mapping
                                 className="hover:bg-slate-50 transition-all duration-300"
                             >
                                 <td className="px-6 py-5 text-xs font-mono text-philhealth-green font-bold">
-                                    #{form.id}
+                                    #{String(form.id).padStart(9, '0')}
                                 </td>
 
                                 <td className="px-6 py-5">
@@ -62,20 +62,24 @@ export default function StatusTable({ forms, onView, isLoading }) {
                                 </td>
 
                                 <td className="px-6 py-5 text-xs text-slate-600 font-medium whitespace-nowrap">
-                                    {new Date(form.submission_date).toLocaleDateString(
-                                        'en-US',
-                                        { month: 'short', day: 'numeric', year: 'numeric' }
-                                    )}
+                                    {form.submission_date
+                                        ? new Date(form.submission_date).toLocaleDateString('en-US', {
+                                            month: 'short',
+                                            day: 'numeric',
+                                            year: 'numeric'
+                                        })
+                                        : 'N/A'
+                                    }
                                 </td>
 
                                 <td className="px-6 py-5 text-center">
                                     <span
                                         className={`inline-block px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                                            form.status === 'Approved'
+                                            form.status.toLowerCase() === 'approved'
                                                 ? 'bg-emerald-100 text-emerald-700'
-                                                : form.status === 'Rejected'
+                                                : form.status.toLowerCase() === 'rejected'
                                                     ? 'bg-red-100 text-red-700'
-                                                    : form.status === 'Pending'
+                                                    : form.status.toLowerCase() === 'pending'
                                                         ? 'bg-amber-100 text-amber-700'
                                                         : 'bg-slate-100 text-slate-500'
                                         }`}
@@ -109,15 +113,12 @@ export default function StatusTable({ forms, onView, isLoading }) {
                     <button className="w-8 h-8 flex items-center justify-center border border-slate-300 rounded bg-white text-[10px] font-bold hover:bg-slate-50">
                         &lt;
                     </button>
-
                     <button className="w-8 h-8 flex items-center justify-center border border-philhealth-green rounded bg-philhealth-green text-white text-[10px] font-bold">
                         1
                     </button>
-
                     <button className="w-8 h-8 flex items-center justify-center border border-slate-300 rounded bg-white text-[10px] font-bold hover:bg-slate-50">
                         2
                     </button>
-
                     <button className="w-8 h-8 flex items-center justify-center border border-slate-300 rounded bg-white text-[10px] font-bold hover:bg-slate-50">
                         &gt;
                     </button>

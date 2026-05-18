@@ -653,7 +653,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                 onChange={handleChange}
                                             />
                                             <FormInput
-                                                label="Date Signed"
+                                                label="Date"
                                                 name="representativeDateSigned"
                                                 type="date"
                                                 value={formData.representativeDateSigned}
@@ -664,7 +664,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                             <div className="space-y-4 p-6 bg-slate-50 rounded-xl">
                                                 <div className="flex justify-between items-center">
-                                                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                                                    <label className="text-[10px] font-black uppercase text-slate-900 tracking-widest">
                                                         Relationship of the representative
                                                     </label>
                                                     {formData.representativeRelationship && (
@@ -691,7 +691,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
 
                                             <div className="space-y-4 p-6 bg-slate-50 rounded-xl">
                                                 <div className="flex justify-between items-center">
-                                                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                                                    <label className="text-[10px] font-black uppercase text-slate-900 tracking-widest">
                                                         Reason for signing on behalf
                                                     </label>
                                                     {formData.behalfReason && (
@@ -761,36 +761,40 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                             {/* ---------------- PART IV HERE ---------------- */}
                             {currentStep === 4 && (
                                 <div className="space-y-8">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                    {/* Row 1: Name of Authorized Representative */}
+                                    <div className="grid grid-cols-1">
                                         <FormInput
                                             label="Name of Authorized HCI Representative"
                                             name="hci_name"
                                             value={formData.hci_name}
                                             onChange={handleChange}
                                         />
+                                    </div>
 
+                                    {/* Row 2: Designation and Date side-by-side */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                         <FormInput
                                             label="Official Capacity/Designation"
                                             name="designation"
                                             value={formData.designation}
                                             onChange={handleChange}
                                         />
+
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black uppercase text-slate-900 tracking-widest">
+                                                Date
+                                            </label>
+                                            <input
+                                                type="date"
+                                                name="date_signed"
+                                                value={formData.date_signed}
+                                                onChange={handleChange}
+                                                className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-philhealth-green/20 outline-none"
+                                            />
+                                        </div>
                                     </div>
 
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                                            Date Signed
-                                        </label>
-
-                                        <input
-                                            type="date"
-                                            name="date_signed"
-                                            value={formData.date_signed}
-                                            onChange={handleChange}
-                                            className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-philhealth-green/20 outline-none"
-                                        />
-                                    </div>
-
+                                    {/* Certification Checkbox */}
                                     <div className="p-8 bg-[#f0f4f0] border-2 border-philhealth-green/10 rounded-2xl border-dashed">
                                         <label className="flex items-start gap-5 cursor-pointer group">
                                             <div className="relative flex items-center justify-center mt-1">
@@ -802,7 +806,6 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                     className="w-6 h-6 rounded border-slate-300 text-philhealth-green focus:ring-philhealth-green cursor-pointer transition-all"
                                                 />
                                             </div>
-
                                             <div className="flex-1">
                                                 <p className="text-[11px] text-slate-600 leading-relaxed font-medium">
                                                     I certify that services rendered were recorded in the patient’s chart and health care institution records and that the herein information given are true and correct.
