@@ -2,6 +2,7 @@ import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, Stethoscope, ClipboardList, CheckSquare, ArrowLeft, Save, ArrowRight } from 'lucide-react';
 import { supabase } from "../lib/supabase.js";
+import Toast from '../pages/Toast.jsx';
 
 const STEPS = [
     { id: 1, title: 'Health Care Institution (HCI) Information', icon: <Stethoscope size={20} /> },
@@ -12,9 +13,41 @@ const STEPS = [
 
 export default function SubmissionForm({ onSubmit, onCancel }) {
     const [currentStep, setCurrentStep] = React.useState(1);
+    const [hciList, setHciList] = React.useState([]);
+    const [hciLoading, setHciLoading] = React.useState(true);
+    const [toast, setToast] = React.useState(null);
+
+    // Fetching for Part I
+    React.useEffect(() => {
+        const fetchHCI = async () => {
+            const { data, error } = await supabase
+                .from('hci_info')
+                .select('*') // SELECT ALL na lang muna
+                .order('hci_name', { ascending: true });
+
+            console.log('HCI columns:', data?.[0]); // this shows exact column names
+
+            if (error) {
+                setToast({ message: 'Could not load HCI list from database.', type: 'error' });
+            } else {
+                setHciList(data || []);
+            }
+            setHciLoading(false);
+        };
+        fetchHCI();
+    }, []);
+
 
     const [formData, setFormData] = React.useState({
-        // Part I & II
+        // REAL Part I - HCI
+        hci_id: '',
+        pan_number: '',
+        // may hci_name na sa part IV
+        hci_address_street: '',
+        hci_address_city: '',
+        hci_address_province: '',
+
+        // Unofficial Part I & II
         patient_name: '',
         philhealth_id: '',
         age: '',
@@ -113,11 +146,46 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
         }
     };
 
-    const nextStep = () => setCurrentStep((prev) => Math.min(prev + 1, 4));
+    // part I
+    const handleHCISelect = (hci_id) => {
+        const selected = hciList.find(h => String(h.hci_id) === String(hci_id));
+        if (!selected) {
+            setFormData(prev => ({
+                ...prev,
+                hci_id: '',
+                pan_number: '',
+                hci_name: '',
+                hci_address_street: '',
+                hci_address_city: '',
+                hci_address_province: '',
+            }));
+            return;
+        }
+        setFormData(prev => ({
+            ...prev,
+            hci_id:              selected.hci_id,
+            pan_number:          selected.pan_number,
+            hci_name:            selected.hci_name,
+            hci_address_street:  selected.hci_address_street,
+            hci_address_city:    selected.hci_address_city,
+            hci_address_province: selected.hci_address_provi,
+        }));
+    };
+
+    // STEPPER AREA
+    const nextStep = () => {
+        if (!isStepValid()) {
+            setToast({
+                message: 'Some fields in this section are incomplete. You can continue, but remember to fill them before submitting.',
+                type: 'warning',
+            });
+        }
+        setCurrentStep((prev) => Math.min(prev + 1, 4));
+    };
     const prevStep = () => setCurrentStep((prev) => Math.max(prev - 1, 1));
 
     const isStepValid = () => {
-        if (currentStep === 1) return formData.patient_name && formData.philhealth_id;
+        if (currentStep === 1) return !!formData.hci_id;
         if (currentStep === 2) return formData.diagnosis && formData.icd10_code;
         if (currentStep === 4) return formData.finalCertification && formData.hci_name;
         return true;
@@ -125,6 +193,14 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
 
     return (
         <div className="max-w-5xl mx-auto pb-12">
+            {/* Toast banner */}
+            {toast && (
+                <Toast
+                    message={toast.message}
+                    type={toast.type}
+                    onClose={() => setToast(null)}
+                />
+            )}
             <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
                 {/* Header */}
                 <div className="bg-philhealth-green text-white p-8 relative overflow-hidden">
@@ -205,48 +281,69 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                         >
                             {/* ---------------- PART I HERE ---------------- */}
                             {currentStep === 1 && (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                    <FormInput
-                                        label="Full Name of Patient"
-                                        name="patient_name"
-                                        value={formData.patient_name}
-                                        onChange={handleChange}
-                                        placeholder="Last Name, First Name, M.I."
-                                    />
-
-                                    <FormInput
-                                        label="PhilHealth ID"
-                                        name="philhealth_id"
-                                        value={formData.philhealth_id}
-                                        onChange={handleChange}
-                                        placeholder="00-000000000-0"
-                                    />
-
-                                    <FormInput
-                                        label="Age"
-                                        name="age"
-                                        type="number"
-                                        value={formData.age}
-                                        onChange={handleChange}
-                                        placeholder="Years"
-                                    />
-
+                                <div className="space-y-8">
+                                    {/* HCI Name Dropdown */}
                                     <div className="space-y-2">
                                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">
-                                            Patient Sex
+                                            Name of Health Care Institution
                                         </label>
-
-                                        <select
-                                            name="sex"
-                                            value={formData.sex}
-                                            onChange={handleChange}
-                                            className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-philhealth-green/20 outline-none transition-all"
-                                        >
-                                            <option value="">Select</option>
-                                            <option value="Male">Male</option>
-                                            <option value="Female">Female</option>
-                                        </select>
+                                        {hciLoading ? (
+                                            <div className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-400 italic">
+                                                Loading institutions...
+                                            </div>
+                                        ) : (
+                                            <select
+                                                value={formData.hci_id}
+                                                onChange={(e) => handleHCISelect(e.target.value)}
+                                                className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-philhealth-green/20 outline-none transition-all"
+                                            >
+                                                <option value="">— Select a Health Care Institution —</option>
+                                                {hciList.map((hci) => (
+                                                    <option key={hci.hci_id} value={hci.hci_id}>
+                                                        {hci.hci_name}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        )}
                                     </div>
+
+                                    {/* Auto-filled fields — shown only after selection */}
+                                    {formData.hci_id && (
+                                        <motion.div
+                                            initial={{ opacity: 0, y: -8 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 bg-emerald-50/50 rounded-2xl border border-emerald-100"
+                                        >
+                                            <FormInput
+                                                label="PhilHealth Accreditation Number (PAN)"
+                                                name="pan_number"
+                                                value={formData.pan_number}
+                                                onChange={() => {}}
+                                                disabled={true}
+                                            />
+                                            <FormInput
+                                                label="Street Address"
+                                                name="hci_address_street"
+                                                value={formData.hci_address_street}
+                                                onChange={() => {}}
+                                                disabled={true}
+                                            />
+                                            <FormInput
+                                                label="City / Municipality"
+                                                name="hci_address_city"
+                                                value={formData.hci_address_city}
+                                                onChange={() => {}}
+                                                disabled={true}
+                                            />
+                                            <FormInput
+                                                label="Province / Region"
+                                                name="hci_address_province"
+                                                value={formData.hci_address_province}
+                                                onChange={() => {}}
+                                                disabled={true}
+                                            />
+                                        </motion.div>
+                                    )}
                                 </div>
                             )}
 
@@ -848,12 +945,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                     ) : (
                         <button
                             onClick={nextStep}
-                            disabled={!isStepValid()}
-                            className={`px-10 py-3.5 rounded-xl font-black text-xs uppercase tracking-[0.15em] flex items-center gap-3 transition-all shadow-xl ${
-                                isStepValid()
-                                    ? 'bg-philhealth-green text-white hover:bg-philhealth-green-dark hover:shadow-philhealth-green/30 active:scale-95'
-                                    : 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-50 shadow-none'
-                            }`}
+                            className="px-10 py-3.5 rounded-xl font-black text-xs uppercase tracking-[0.15em] flex items-center gap-3 transition-all shadow-xl bg-philhealth-green text-white hover:bg-philhealth-green-dark hover:shadow-philhealth-green/30 active:scale-95"
                             id="next-btn"
                         >
                             Continue
