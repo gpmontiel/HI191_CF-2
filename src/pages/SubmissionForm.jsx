@@ -824,7 +824,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                     />
                                                 </div>
                                                 <div className="flex-1">
-                                                    <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
+                                                    <p className="text-[11px] text-slate-800 font-medium leading-relaxed">
                                                         I hereby consent to the submission and examination of the patient’s pertinent medical records for the purpose of verifying the veracity of this claim to effect efficient processing of benefit payment.
                                                     </p>
                                                 </div>
@@ -843,7 +843,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                     />
                                                 </div>
                                                 <div className="flex-1">
-                                                    <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
+                                                    <p className="text-[11px] text-slate-800 font-medium leading-relaxed">
                                                         I hereby hold PhilHealth or any of its officers, employees and/or representatives free from any and all legal liabilities relative to the herein-mentioned consent which I have voluntarily and willingly given in connection with this claim for reimbursement before PhilHealth.
                                                     </p>
                                                 </div>
@@ -904,7 +904,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                 />
                                             </div>
                                             <div className="flex-1">
-                                                <p className="text-[11px] text-slate-600 leading-relaxed font-medium">
+                                                <p className="text-[11px] text-slate-800 leading-relaxed font-medium">
                                                     I certify that services rendered were recorded in the patient’s chart and health care institution records and that the herein information given are true and correct.
                                                 </p>
                                             </div>

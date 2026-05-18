@@ -42,7 +42,7 @@ export default function LoginForm({ onLogin, isLoading: externalLoading }) {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center p-4 bg-[#f0f4f0] relative overflow-hidden font-sans">
+        <div className="min-h-screen flex items-center justify-center p-10 bg-[#f0f4f0] relative overflow-hidden font-sans">
             {/* Decorative Background Elements */}
             <div className="absolute top-0 left-0 w-full h-full pointer-events-none">
                 <div className="absolute top-1/4 -left-20 w-80 h-80 bg-philhealth-green/5 rounded-full blur-[100px] animate-pulse" />
