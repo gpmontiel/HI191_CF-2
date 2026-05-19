@@ -75,36 +75,44 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
         
         // array of objects from DB
         special_considerations: {
-            hemodialysis: { checked: false, dates: '' },
-            blood_transfusion: { checked: false, dates: '' },
-            peritoneal_dialysis: { checked: false, dates: '' },
-            brachytherapy: { checked: false, dates: '' },
-            radiotherapy_linac: { checked: false, dates: '' },
-            chemotherapy: { checked: false, dates: '' },
-            radiotherapy_cobalt: { checked: false, dates: '' },
-            simple_debridement: { checked: false, dates: '' }
+            hemodialysis: { checked: false, dates: [''] },
+            blood_transfusion: { checked: false, dates: [''] },
+            peritoneal_dialysis: { checked: false, dates: [''] },
+            brachytherapy: { checked: false, dates: [''] },
+            radiotherapy_linac: { checked: false, dates: [''] },
+            chemotherapy: { checked: false, dates: [''] },
+            radiotherapy_cobalt: { checked: false, dates: [''] },
+            simple_debridement: { checked: false, dates: [''] }
         },
 
         // Add these inside your initial useState block under special_considerations:
         packages: {
-            // b. Z-Benefit
             z_benefit_code: '',
-
-            // c. MCP Package (Pre-natal check-ups)
-            mcp_dates: ['', '', '', ''], // Array for the 4 dates
-
-            // d. TB DOTS Package
+            mcp_dates: ['', '', '', ''],
             tb_dots_intensive: false,
             tb_dots_maintenance: false,
-
             animal_bite: {
                 day_0_arv: '',
                 day_3_arv: '',
                 day_7_arv: '',
                 rig: '',
                 others: ''
-            }
-
+            },
+            newborn: {
+                is_essential: false,
+                is_hearing_screening: false,
+                is_screening: false,
+                is_immediate_drying: false,
+                is_early_skin: false,
+                is_cord_clamping: false,
+                is_eye_prophylaxis: false,
+                is_weighing: false,
+                is_vitamink: false,
+                is_bcg: false,
+                is_nonseparation: false,
+                is_hepaB: false,
+            },
+            hiv_lab_number: '',
         },
 
         philhealth_benefits: {
@@ -262,13 +270,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
             .select('*')
             .eq('confinement_id', record.confinement_id);
 
-        // 2. Fetch the intermediary special_consideration row
-        const { data: considerationRow, error: considerationError } = await supabase
-            .from('special_consideration')
-            .select('*')
-            .eq('confinement_id', record.confinement_id)
-            .maybeSingle();
-
+        // 2. Fetch philhealth benefits
         const { data: philhealthData, error: phError } = await supabase
             .from('philhealth_benefits')
             .select('*')
@@ -279,87 +281,6 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
             .from('accreditation')
             .select('*')
             .eq('confinement_id', record.confinement_id);
-
-        let repData = [];
-        let biteData = [];
-        let mcpData = [];
-        let newbornRows = null;
-        let repError = null;
-
-        // 3. Fetch from all child sub-tables via consideration_id
-        if (considerationRow?.consideration_id) {
-            // Fetch Repetitive Procedures
-            const { data: rData, error: rErr } = await supabase
-                .from('repetitive_procedure')
-                .select('*')
-                .eq('consideration_id', considerationRow.consideration_id);
-            repData = rData || [];
-            repError = rErr;
-
-            // Fetch Animal Bite Package rows
-            const { data: bData } = await supabase
-                .from('animal_bite_package') 
-                .select('*')
-                .eq('consideration_id', considerationRow.consideration_id);
-            biteData = bData || [];
-
-            // Fetch MCP Package rows
-            const { data: mData } = await supabase
-                .from('mcp_package') 
-                .select('*')
-                .eq('consideration_id', considerationRow.consideration_id);
-            mcpData = mData || [];
-
-            // NEW: Fetch Newborn Package row
-            const { data: nData } = await supabase
-                .from('newborn_package') 
-                .select('*')
-                .eq('consideration_id', considerationRow.consideration_id);
-            mcpData = mData || [];
-            newbornRows = nData || []; // Change this to plural
-        }
-
-        // Helper date formatter (converts YYYY-MM-DD to MM-DD-YYYY)
-        const formatDbDate = (dbDate) => {
-            if (!dbDate) return '';
-            const [year, month, day] = dbDate.split('-');
-            return `${month}-${day}-${year}`;
-        };
-
-        // Parser for Repetitive Procedures (Part a)
-        const getProcedureData = (procedureName) => {
-            if (repError || repData.length === 0) return { checked: false, dates: '' };
-            const matches = repData.filter(row => row.procedure?.toLowerCase().trim() === procedureName.toLowerCase().trim());
-            if (matches.length === 0) return { checked: false, dates: '' };
-            return {
-                checked: true,
-                dates: matches.map(row => formatDbDate(row.session_date)).filter(Boolean).join(', ')
-            };
-        };
-
-        // Parser for Animal Bite Vaccines (Part e)
-        const getVaccineDate = (vaccineType) => {
-            const match = biteData.find(row => row.vaccine_type?.toLowerCase().trim() === vaccineType.toLowerCase().trim());
-            return match ? formatDbDate(match.date) : '';
-        };
-
-        const getAnimalBiteOthers = () => {
-            const match = biteData.find(row => row.vaccine_type?.toLowerCase().trim() === 'others');
-            if (!match) return '';
-            return match.others_desc ? `${match.others_desc} (${formatDbDate(match.date)})` : formatDbDate(match.date);
-        };
-
-        // Parser for MCP Pre-natal checkup array mapping (Part c)
-        const getMcpDatesArray = () => {
-            const datesArray = ['', '', '', ''];
-            mcpData.forEach(row => {
-                const checkupNum = parseInt(row.checkup_no, 10);
-                if (checkupNum >= 1 && checkupNum <= 4) {
-                    datesArray[checkupNum - 1] = formatDbDate(row.checkup_date);
-                }
-            });
-            return datesArray;
-        };
 
         setFormData(prev => ({
             ...prev,
@@ -380,50 +301,46 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
             accomodation_type:        record.accomodation_type || '', 
             discharge_diagnoses:      diagError ? [] : (diagData || []),
 
-            // Part a
+            // Part a — always blank, user fills manually
             special_considerations: {
-                hemodialysis:        getProcedureData('Hemodialysis'),
-                blood_transfusion:   getProcedureData('Blood Transfusion'),
-                peritoneal_dialysis: getProcedureData('Peritoneal Dialysis'),
-                brachytherapy:       getProcedureData('Brachytherapy'),
-                radiotherapy_linac:  getProcedureData('Radiotherapy (LINAC)'),
-                chemotherapy:        getProcedureData('Chemotherapy'),
-                radiotherapy_cobalt: getProcedureData('Radiotherapy (COBALT)'),
-                simple_debridement:  getProcedureData('Simple Debridement')
+                hemodialysis:        { checked: false, dates: [''] },
+                blood_transfusion:   { checked: false, dates: [''] },
+                peritoneal_dialysis: { checked: false, dates: [''] },
+                brachytherapy:       { checked: false, dates: [''] },
+                radiotherapy_linac:  { checked: false, dates: [''] },
+                chemotherapy:        { checked: false, dates: [''] },
+                radiotherapy_cobalt: { checked: false, dates: [''] },
+                simple_debridement:  { checked: false, dates: [''] }
             },
 
-            // Parts b to g
+            // Parts b to g — always blank, user fills manually
             packages: {
-                z_benefit_code: considerationRow?.zbenefit_code || '',
-                mcp_dates: getMcpDatesArray(),
-                tb_dots_intensive: considerationRow?.tbdots_package?.toLowerCase() === 'intensive phase',
-                tb_dots_maintenance: considerationRow?.tbdots_package?.toLowerCase() === 'maintenance phase',
+                z_benefit_code: '',
+                mcp_dates: ['', '', '', ''],
+                tb_dots_intensive: false,
+                tb_dots_maintenance: false,
                 animal_bite: {
-                    day_0_arv: getVaccineDate('Day 0 ARV'),
-                    day_3_arv: getVaccineDate('Day 3 ARV'),
-                    day_7_arv: getVaccineDate('Day 7 ARV'),
-                    rig:       getVaccineDate('RIG'),
-                    others:    getAnimalBiteOthers()
+                    day_0_arv: '',
+                    day_3_arv: '',
+                    day_7_arv: '',
+                    rig:       '',
+                    others:    ''
                 },
-
-                // NEW: Newborn Care Package Mapping
                 newborn: {
-                    is_essential:         newbornRows.some(row => row.is_essential === true || row.is_essential === 'TRUE'),
-                    is_hearing_screening: newbornRows.some(row => row.is_hearing_screening === true || row.is_hearing_screening === 'TRUE'),
-                    is_screening:         newbornRows.some(row => row.is_screening === true || row.is_screening === 'TRUE'),
-                    is_immediate_drying:  newbornRows.some(row => row.is_immediate_drying === true || row.is_immediate_drying === 'TRUE'),
-                    is_early_skin:         newbornRows.some(row => row.is_early_skin === true || row.is_early_skin === 'TRUE'),
-                    is_cord_clamping:      newbornRows.some(row => row.is_cord_clamping === true || row.is_cord_clamping === 'TRUE'),
-                    is_eye_prophylaxis:    newbornRows.some(row => row.is_eye_prophylaxis === true || row.is_eye_prophylaxis === 'TRUE'),
-                    is_weighing:          newbornRows.some(row => row.is_weighing === true || row.is_weighing === 'TRUE'),
-                    is_vitamink:          newbornRows.some(row => row.is_vitamink === true || row.is_vitamink === 'TRUE'),
-                    is_bcg:               newbornRows.some(row => row.is_bcg === true || row.is_bcg === 'TRUE'),
-                    is_nonseparation:     newbornRows.some(row => row.is_nonseparation === true || row.is_nonseparation === 'TRUE'),
-                    is_hepaB:             newbornRows.some(row => row.is_hepaB === true || row.is_hepaB === 'TRUE')
+                    is_essential:         false,
+                    is_hearing_screening: false,
+                    is_screening:         false,
+                    is_immediate_drying:  false,
+                    is_early_skin:        false,
+                    is_cord_clamping:     false,
+                    is_eye_prophylaxis:   false,
+                    is_weighing:          false,
+                    is_vitamink:          false,
+                    is_bcg:               false,
+                    is_nonseparation:     false,
+                    is_hepaB:             false,
                 },
-
-                // NEW: Outpatient HIV/AIDS Treatment Mapping
-                hiv_lab_number: considerationRow?.hiv_lab_number || '',
+                hiv_lab_number: '',
             },
 
             philhealth_benefits: {
@@ -816,46 +733,163 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                     </p>
                                                 </div>
 
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 pt-2">
-                                                    {[
-                                                        { id: 'hemodialysis', label: 'Hemodialysis' },
-                                                        { id: 'blood_transfusion', label: 'Blood Transfusion' },
-                                                        { id: 'peritoneal_dialysis', label: 'Peritoneal Dialysis' },
-                                                        { id: 'brachytherapy', label: 'Brachytherapy' },
-                                                        { id: 'radiotherapy_linac', label: 'Radiotherapy (LINAC)' },
-                                                        { id: 'chemotherapy', label: 'Chemotherapy' },
-                                                        { id: 'radiotherapy_cobalt', label: 'Radiotherapy (COBALT)' },
-                                                        { id: 'simple_debridement', label: 'Simple Debridement' }
-                                                    ].map((proc) => {
-                                                        const isChecked = !!formData.special_considerations?.[proc.id]?.checked;
-                                                        const datesValue = formData.special_considerations?.[proc.id]?.dates || '';
+                                                {/* Dropdown to add a procedure */}
+                                                <div className="flex items-center gap-3 pt-2">
+                                                    <select
+                                                        defaultValue=""
+                                                        onChange={(e) => {
+                                                            const id = e.target.value;
+                                                            if (!id) return;
+                                                            setFormData(prev => ({
+                                                                ...prev,
+                                                                special_considerations: {
+                                                                    ...prev.special_considerations,
+                                                                    [id]: {
+                                                                        ...prev.special_considerations[id],
+                                                                        checked: true,
+                                                                        dates: prev.special_considerations[id]?.dates?.length
+                                                                            ? prev.special_considerations[id].dates
+                                                                            : ['']
+                                                                    }
+                                                                }
+                                                            }));
+                                                            e.target.value = '';
+                                                        }}
+                                                        className="flex-1 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-philhealth-green/20 outline-none transition-all"
+                                                    >
+                                                        <option value="">— Select a procedure to add —</option>
+                                                        {[
+                                                            { id: 'hemodialysis',        label: 'Hemodialysis' },
+                                                            { id: 'blood_transfusion',   label: 'Blood Transfusion' },
+                                                            { id: 'peritoneal_dialysis', label: 'Peritoneal Dialysis' },
+                                                            { id: 'brachytherapy',       label: 'Brachytherapy' },
+                                                            { id: 'radiotherapy_linac',  label: 'Radiotherapy (LINAC)' },
+                                                            { id: 'chemotherapy',        label: 'Chemotherapy' },
+                                                            { id: 'radiotherapy_cobalt', label: 'Radiotherapy (COBALT)' },
+                                                            { id: 'simple_debridement',  label: 'Simple Debridement' }
+                                                        ].filter(proc => !formData.special_considerations?.[proc.id]?.checked)
+                                                         .map(proc => (
+                                                            <option key={proc.id} value={proc.id}>{proc.label}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
 
+                                                {/* Active procedure cards */}
+                                                <div className="space-y-3">
+                                                    {[
+                                                        { id: 'hemodialysis',        label: 'Hemodialysis' },
+                                                        { id: 'blood_transfusion',   label: 'Blood Transfusion' },
+                                                        { id: 'peritoneal_dialysis', label: 'Peritoneal Dialysis' },
+                                                        { id: 'brachytherapy',       label: 'Brachytherapy' },
+                                                        { id: 'radiotherapy_linac',  label: 'Radiotherapy (LINAC)' },
+                                                        { id: 'chemotherapy',        label: 'Chemotherapy' },
+                                                        { id: 'radiotherapy_cobalt', label: 'Radiotherapy (COBALT)' },
+                                                        { id: 'simple_debridement',  label: 'Simple Debridement' }
+                                                    ].filter(proc => !!formData.special_considerations?.[proc.id]?.checked)
+                                                     .map((proc) => {
+                                                        const dates = formData.special_considerations?.[proc.id]?.dates || [''];
                                                         return (
-                                                            <div key={proc.id} className="flex items-start gap-4 p-4 bg-white rounded-xl border border-slate-200/60 shadow-sm transition-all">
-                                                                <div className="flex items-center h-10">
-                                                                    <input
-                                                                        type="checkbox"
-                                                                        id={proc.id}
-                                                                        checked={isChecked}
-                                                                        disabled
-                                                                        className="w-4 h-4 rounded text-philhealth-green border-slate-300 focus:ring-philhealth-green/20 accent-emerald-600 disabled:opacity-80"
-                                                                    />
-                                                                </div>
-                                                                <div className="flex-1 space-y-1.5">
-                                                                    <label htmlFor={proc.id} className="text-[11px] font-black text-slate-700 uppercase tracking-wide">
+                                                            <div key={proc.id} className="p-4 bg-white rounded-xl border border-philhealth-green/30 shadow-sm space-y-3">
+                                                                {/* Card header */}
+                                                                <div className="flex items-center justify-between">
+                                                                    <span className="text-[11px] font-black text-slate-700 uppercase tracking-wide">
                                                                         {proc.label}
-                                                                    </label>
-                                                                    <input
-                                                                        type="text"
-                                                                        value={datesValue}
-                                                                        placeholder="—"
-                                                                        disabled
-                                                                        className="w-full px-3 py-2 bg-slate-50/50 border border-slate-200 rounded-lg text-xs font-bold text-slate-600 tracking-wide outline-none disabled:bg-slate-50/50 disabled:text-slate-500"
-                                                                    />
+                                                                    </span>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            setFormData(prev => ({
+                                                                                ...prev,
+                                                                                special_considerations: {
+                                                                                    ...prev.special_considerations,
+                                                                                    [proc.id]: { checked: false, dates: [''] }
+                                                                                }
+                                                                            }));
+                                                                        }}
+                                                                        className="text-slate-300 hover:text-red-400 transition-colors text-lg font-bold leading-none"
+                                                                        title="Remove procedure"
+                                                                    >
+                                                                        ×
+                                                                    </button>
                                                                 </div>
+
+                                                                {/* Date rows */}
+                                                                <div className="space-y-2">
+                                                                    {dates.map((dateVal, idx) => (
+                                                                        <div key={idx} className="flex items-center gap-2">
+                                                                            <span className="text-[10px] font-black text-slate-400 w-6 text-right shrink-0">
+                                                                                {idx + 1}.
+                                                                            </span>
+                                                                            <input
+                                                                                type="date"
+                                                                                value={dateVal}
+                                                                                onChange={(e) => {
+                                                                                    const updated = [...dates];
+                                                                                    updated[idx] = e.target.value;
+                                                                                    setFormData(prev => ({
+                                                                                        ...prev,
+                                                                                        special_considerations: {
+                                                                                            ...prev.special_considerations,
+                                                                                            [proc.id]: {
+                                                                                                ...prev.special_considerations[proc.id],
+                                                                                                dates: updated
+                                                                                            }
+                                                                                        }
+                                                                                    }));
+                                                                                }}
+                                                                                className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:ring-2 focus:ring-philhealth-green/20 focus:border-philhealth-green/40 outline-none transition-all"
+                                                                            />
+                                                                            {dates.length > 1 && (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => {
+                                                                                        const updated = dates.filter((_, i) => i !== idx);
+                                                                                        setFormData(prev => ({
+                                                                                            ...prev,
+                                                                                            special_considerations: {
+                                                                                                ...prev.special_considerations,
+                                                                                                [proc.id]: {
+                                                                                                    ...prev.special_considerations[proc.id],
+                                                                                                    dates: updated
+                                                                                                }
+                                                                                            }
+                                                                                        }));
+                                                                                    }}
+                                                                                    className="text-slate-300 hover:text-red-400 transition-colors text-base font-bold leading-none shrink-0"
+                                                                                    title="Remove date"
+                                                                                >
+                                                                                    ×
+                                                                                </button>
+                                                                            )}
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+
+                                                                {/* Add date row */}
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setFormData(prev => ({
+                                                                            ...prev,
+                                                                            special_considerations: {
+                                                                                ...prev.special_considerations,
+                                                                                [proc.id]: {
+                                                                                    ...prev.special_considerations[proc.id],
+                                                                                    dates: [...dates, '']
+                                                                                }
+                                                                            }
+                                                                        }));
+                                                                    }}
+                                                                    className="text-[10px] font-black text-philhealth-green hover:text-philhealth-green-dark uppercase tracking-wider flex items-center gap-1 transition-colors"
+                                                                >
+                                                                    + Add Date
+                                                                </button>
                                                             </div>
                                                         );
                                                     })}
+                                                    {Object.values(formData.special_considerations || {}).every(v => !v?.checked) && (
+                                                        <p className="text-[11px] text-slate-400 italic px-1">No procedures selected yet.</p>
+                                                    )}
                                                 </div>
                                                 {/* b. Z-Benefit Package */}
                                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center p-4 bg-white rounded-xl border border-slate-200/60 shadow-sm">
@@ -863,10 +897,10 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                         b. For Z-Benefit Package
                                                     </div>
                                                     <div className="md:col-span-2">
-                                                        <FormInput 
-                                                            label="Z-Benefit Package Code" 
-                                                            value={formData.packages?.z_benefit_code} 
-                                                            disabled 
+                                                        <FormInput
+                                                            label="Z-Benefit Package Code"
+                                                            value={formData.packages?.z_benefit_code || ''}
+                                                            onChange={(e) => setFormData(prev => ({ ...prev, packages: { ...prev.packages, z_benefit_code: e.target.value } }))}
                                                         />
                                                     </div>
                                                 </div>
@@ -878,11 +912,16 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                     </p>
                                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                                         {[1, 2, 3, 4].map((num, idx) => (
-                                                            <FormInput 
+                                                            <FormInput
                                                                 key={num}
-                                                                label={`Check-up ${num}`} 
-                                                                value={formData.packages?.mcp_dates?.[idx] || ''} 
-                                                                disabled 
+                                                                label={`Check-up ${num}`}
+                                                                type="date"
+                                                                value={formData.packages?.mcp_dates?.[idx] || ''}
+                                                                onChange={(e) => {
+                                                                    const updated = [...(formData.packages?.mcp_dates || ['', '', '', ''])];
+                                                                    updated[idx] = e.target.value;
+                                                                    setFormData(prev => ({ ...prev, packages: { ...prev.packages, mcp_dates: updated } }));
+                                                                }}
                                                             />
                                                         ))}
                                                     </div>
@@ -894,24 +933,35 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                         d. For TB DOTS Package
                                                     </div>
                                                     <div className="flex gap-6 md:col-span-2">
-                                                        <label className="flex items-center gap-2.5 text-xs font-bold text-slate-600 cursor-not-allowed">
-                                                            <input 
-                                                                type="checkbox" 
-                                                                checked={!!formData.packages?.tb_dots_intensive} 
-                                                                disabled 
-                                                                className="w-4 h-4 rounded text-philhealth-green border-slate-300 accent-emerald-600" 
+                                                        <label className="flex items-center gap-2.5 text-xs font-bold text-slate-600 cursor-pointer">
+                                                            <input
+                                                                type="radio"
+                                                                name="tb_dots_phase"
+                                                                checked={!!formData.packages?.tb_dots_intensive}
+                                                                onChange={() => setFormData(prev => ({ ...prev, packages: { ...prev.packages, tb_dots_intensive: true, tb_dots_maintenance: false } }))}
+                                                                className="w-4 h-4 text-philhealth-green border-slate-300 accent-emerald-600 cursor-pointer"
                                                             />
                                                             Intensive Phase
                                                         </label>
-                                                        <label className="flex items-center gap-2.5 text-xs font-bold text-slate-600 cursor-not-allowed">
-                                                            <input 
-                                                                type="checkbox" 
-                                                                checked={!!formData.packages?.tb_dots_maintenance} 
-                                                                disabled 
-                                                                className="w-4 h-4 rounded text-philhealth-green border-slate-300 accent-emerald-600" 
+                                                        <label className="flex items-center gap-2.5 text-xs font-bold text-slate-600 cursor-pointer">
+                                                            <input
+                                                                type="radio"
+                                                                name="tb_dots_phase"
+                                                                checked={!!formData.packages?.tb_dots_maintenance}
+                                                                onChange={() => setFormData(prev => ({ ...prev, packages: { ...prev.packages, tb_dots_intensive: false, tb_dots_maintenance: true } }))}
+                                                                className="w-4 h-4 text-philhealth-green border-slate-300 accent-emerald-600 cursor-pointer"
                                                             />
                                                             Maintenance Phase
                                                         </label>
+                                                        {(formData.packages?.tb_dots_intensive || formData.packages?.tb_dots_maintenance) && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setFormData(prev => ({ ...prev, packages: { ...prev.packages, tb_dots_intensive: false, tb_dots_maintenance: false } }))}
+                                                                className="text-[10px] text-slate-400 hover:text-red-400 font-bold transition-colors"
+                                                            >
+                                                                Clear
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 </div>
 
@@ -925,13 +975,28 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                             ARV / RIG
                                                         </span>
                                                     </div>
-                                                    
                                                     <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                                                        <FormInput label="Day 0 ARV" value={formData.packages?.animal_bite?.day_0_arv} disabled />
-                                                        <FormInput label="Day 3 ARV" value={formData.packages?.animal_bite?.day_3_arv} disabled />
-                                                        <FormInput label="Day 7 ARV" value={formData.packages?.animal_bite?.day_7_arv} disabled />
-                                                        <FormInput label="RIG"       value={formData.packages?.animal_bite?.rig}       disabled />
-                                                        <FormInput label="Others (Specify)" value={formData.packages?.animal_bite?.others} disabled />
+                                                        {[
+                                                            { label: 'Day 0 ARV', field: 'day_0_arv', isDate: true },
+                                                            { label: 'Day 3 ARV', field: 'day_3_arv', isDate: true },
+                                                            { label: 'Day 7 ARV', field: 'day_7_arv', isDate: true },
+                                                            { label: 'RIG',       field: 'rig',       isDate: true },
+                                                            { label: 'Others (Specify)', field: 'others', isDate: false },
+                                                        ].map(({ label, field, isDate }) => (
+                                                            <FormInput
+                                                                key={field}
+                                                                label={label}
+                                                                type={isDate ? 'date' : 'text'}
+                                                                value={formData.packages?.animal_bite?.[field] || ''}
+                                                                onChange={(e) => setFormData(prev => ({
+                                                                    ...prev,
+                                                                    packages: {
+                                                                        ...prev.packages,
+                                                                        animal_bite: { ...prev.packages.animal_bite, [field]: e.target.value }
+                                                                    }
+                                                                }))}
+                                                            />
+                                                        ))}
                                                     </div>
                                                 </div>
 
@@ -940,21 +1005,27 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                     <div className="text-[11px] font-black text-slate-700 uppercase tracking-wide">
                                                         f. For Newborn Care Package
                                                     </div>
-                                                    
+
                                                     {/* Main Parent Row Options */}
                                                     <div className="flex flex-wrap gap-6 px-2 py-1 bg-slate-50 rounded-lg border border-slate-100">
-                                                        <label className="flex items-center gap-2.5 text-xs font-bold text-slate-600 cursor-not-allowed">
-                                                            <input type="checkbox" checked={!!formData.packages?.newborn?.is_essential} disabled className="w-4 h-4 rounded text-philhealth-green border-slate-300 accent-emerald-600" />
-                                                            Essential Newborn Care
-                                                        </label>
-                                                        <label className="flex items-center gap-2.5 text-xs font-bold text-slate-600 cursor-not-allowed">
-                                                            <input type="checkbox" checked={!!formData.packages?.newborn?.is_hearing_screening} disabled className="w-4 h-4 rounded text-philhealth-green border-slate-300 accent-emerald-600" />
-                                                            Newborn Hearing Screening Test
-                                                        </label>
-                                                        <label className="flex items-center gap-2.5 text-xs font-bold text-slate-600 cursor-not-allowed">
-                                                            <input type="checkbox" checked={!!formData.packages?.newborn?.is_screening} disabled className="w-4 h-4 rounded text-philhealth-green border-slate-300 accent-emerald-600" />
-                                                            Newborn Screening Test
-                                                        </label>
+                                                        {[
+                                                            { label: 'Essential Newborn Care',        field: 'is_essential' },
+                                                            { label: 'Newborn Hearing Screening Test', field: 'is_hearing_screening' },
+                                                            { label: 'Newborn Screening Test',         field: 'is_screening' },
+                                                        ].map(({ label, field }) => (
+                                                            <label key={field} className="flex items-center gap-2.5 text-xs font-bold text-slate-600 cursor-pointer">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={!!formData.packages?.newborn?.[field]}
+                                                                    onChange={(e) => setFormData(prev => ({
+                                                                        ...prev,
+                                                                        packages: { ...prev.packages, newborn: { ...prev.packages.newborn, [field]: e.target.checked } }
+                                                                    }))}
+                                                                    className="w-4 h-4 rounded text-philhealth-green border-slate-300 accent-emerald-600 cursor-pointer"
+                                                                />
+                                                                {label}
+                                                            </label>
+                                                        ))}
                                                     </div>
 
                                                     {/* Sub-section: For Essential Newborn Care */}
@@ -962,44 +1033,31 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                         <p className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
                                                             For Essential Newborn Care <span className="text-[9px] text-slate-400 font-medium normal-case italic">(applicable components)</span>
                                                         </p>
-                                                        
                                                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5 pl-1">
-                                                            <label className="flex items-center gap-2 text-xs font-medium text-slate-600 cursor-not-allowed">
-                                                                <input type="checkbox" checked={!!formData.packages?.newborn?.is_immediate_drying} disabled className="w-3.5 h-3.5 rounded border-slate-300 text-emerald-600" />
-                                                                Immediate drying of newborn
-                                                            </label>
-                                                            <label className="flex items-center gap-2 text-xs font-medium text-slate-600 cursor-not-allowed">
-                                                                <input type="checkbox" checked={!!formData.packages?.newborn?.is_early_skin} disabled className="w-3.5 h-3.5 rounded border-slate-300 text-emerald-600" />
-                                                                Early skin-to-skin contact
-                                                            </label>
-                                                            <label className="flex items-center gap-2 text-xs font-medium text-slate-600 cursor-not-allowed">
-                                                                <input type="checkbox" checked={!!formData.packages?.newborn?.is_cord_clamping} disabled className="w-3.5 h-3.5 rounded border-slate-300 text-emerald-600" />
-                                                                Timely cord clamping
-                                                            </label>
-                                                            <label className="flex items-center gap-2 text-xs font-medium text-slate-600 cursor-not-allowed">
-                                                                <input type="checkbox" checked={!!formData.packages?.newborn?.is_eye_prophylaxis} disabled className="w-3.5 h-3.5 rounded border-slate-300 text-emerald-600" />
-                                                                Eye Prophylaxis
-                                                            </label>
-                                                            <label className="flex items-center gap-2 text-xs font-medium text-slate-600 cursor-not-allowed">
-                                                                <input type="checkbox" checked={!!formData.packages?.newborn?.is_weighing} disabled className="w-3.5 h-3.5 rounded border-slate-300 text-emerald-600" />
-                                                                Weighing of the newborn
-                                                            </label>
-                                                            <label className="flex items-center gap-2 text-xs font-medium text-slate-600 cursor-not-allowed">
-                                                                <input type="checkbox" checked={!!formData.packages?.newborn?.is_vitamink} disabled className="w-3.5 h-3.5 rounded border-slate-300 text-emerald-600" />
-                                                                Vitamin K administration
-                                                            </label>
-                                                            <label className="flex items-center gap-2 text-xs font-medium text-slate-600 cursor-not-allowed">
-                                                                <input type="checkbox" checked={!!formData.packages?.newborn?.is_bcg} disabled className="w-3.5 h-3.5 rounded border-slate-300 text-emerald-600" />
-                                                                BCG vaccination
-                                                            </label>
-                                                            <label className="flex items-center gap-2 text-xs font-medium text-slate-600 cursor-not-allowed">
-                                                                <input type="checkbox" checked={!!formData.packages?.newborn?.is_nonseparation} disabled className="w-3.5 h-3.5 rounded border-slate-300 text-emerald-600" />
-                                                                Non-separation / Breastfeeding
-                                                            </label>
-                                                            <label className="flex items-center gap-2 text-xs font-medium text-slate-600 cursor-not-allowed">
-                                                                <input type="checkbox" checked={!!formData.packages?.newborn?.is_hepaB} disabled className="w-3.5 h-3.5 rounded border-slate-300 text-emerald-600" />
-                                                                Hepatitis B vaccination
-                                                            </label>
+                                                            {[
+                                                                { label: 'Immediate drying of newborn', field: 'is_immediate_drying' },
+                                                                { label: 'Early skin-to-skin contact',  field: 'is_early_skin' },
+                                                                { label: 'Timely cord clamping',        field: 'is_cord_clamping' },
+                                                                { label: 'Eye Prophylaxis',             field: 'is_eye_prophylaxis' },
+                                                                { label: 'Weighing of the newborn',     field: 'is_weighing' },
+                                                                { label: 'Vitamin K administration',    field: 'is_vitamink' },
+                                                                { label: 'BCG vaccination',             field: 'is_bcg' },
+                                                                { label: 'Non-separation / Breastfeeding', field: 'is_nonseparation' },
+                                                                { label: 'Hepatitis B vaccination',     field: 'is_hepaB' },
+                                                            ].map(({ label, field }) => (
+                                                                <label key={field} className="flex items-center gap-2 text-xs font-medium text-slate-600 cursor-pointer">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={!!formData.packages?.newborn?.[field]}
+                                                                        onChange={(e) => setFormData(prev => ({
+                                                                            ...prev,
+                                                                            packages: { ...prev.packages, newborn: { ...prev.packages.newborn, [field]: e.target.checked } }
+                                                                        }))}
+                                                                        className="w-3.5 h-3.5 rounded border-slate-300 text-emerald-600 accent-emerald-600 cursor-pointer"
+                                                                    />
+                                                                    {label}
+                                                                </label>
+                                                            ))}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -1010,10 +1068,10 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                         g. For Outpatient HIV/AIDS Treatment Package
                                                     </div>
                                                     <div className="md:col-span-2">
-                                                        <FormInput 
-                                                            label="Laboratory Number" 
-                                                            value={formData.packages?.hiv_lab_number} 
-                                                            disabled 
+                                                        <FormInput
+                                                            label="Laboratory Number"
+                                                            value={formData.packages?.hiv_lab_number || ''}
+                                                            onChange={(e) => setFormData(prev => ({ ...prev, packages: { ...prev.packages, hiv_lab_number: e.target.value } }))}
                                                         />
                                                     </div>
                                                 </div>
@@ -1024,15 +1082,17 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">9. PhilHealth Benefits</p>
 
                                                 <div className="p-6 bg-slate-50/50 grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                    <FormInput 
-                                                        label="First Case Rate" 
-                                                        value={formData.philhealth_benefits?.first_case_rate || ''} 
-                                                        disabled 
+                                                    <FormInput
+                                                        label="First Case Rate"
+                                                        value={formData.philhealth_benefits?.first_case_rate || ''}
+                                                        onChange={() => {}}
+                                                        disabled
                                                     />
-                                                    <FormInput 
-                                                        label="Second Case Rate" 
-                                                        value={formData.philhealth_benefits?.second_case_rate || ''} 
-                                                        disabled 
+                                                    <FormInput
+                                                        label="Second Case Rate"
+                                                        value={formData.philhealth_benefits?.second_case_rate || ''}
+                                                        onChange={() => {}}
+                                                        disabled
                                                     />
                                                 </div>
                                             </div>
@@ -1062,23 +1122,21 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                             onClick={() => removeProfessionalRow(index)}
                                                             className="absolute top-2 right-2 text-red-400 hover:text-red-600 text-[9px] font-bold uppercase"
                                                         >
-                                                            Remove
+                                                            X
                                                         </button>
 
                                                         <div className="col-span-12 md:col-span-7 grid grid-cols-3 gap-3">
                                                             <div className="col-span-1">
-                                                                <label className="block text-[10px] font-bold text-slate-500 uppercase">Date Signed</label>
-                                                                <input type="date" className="w-full border-b bg-transparent py-1" value={prof.date} onChange={(e) => handleProfessionalChange(index, 'date', e.target.value)} />
-                                                                
+                                                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mb-1">Date Signed</label>
+                                                                <input type="date" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-philhealth-green/20 outline-none transition-all" value={prof.date} onChange={(e) => handleProfessionalChange(index, 'date', e.target.value)} />
                                                             </div>
                                                             <div className="col-span-2">
-                                                                <label className="block text-[10px] font-bold text-slate-500 uppercase">Accreditation No.</label>
-                                                                <input className="w-full border-b bg-transparent py-1" value={prof.accreditation_number} onChange={(e) => handleProfessionalChange(index, 'accreditation_number', e.target.value)} />
+                                                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mb-1">Accreditation No.</label>
+                                                                <input className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-philhealth-green/20 outline-none transition-all" value={prof.accreditation_number} onChange={(e) => handleProfessionalChange(index, 'accreditation_number', e.target.value)} />
                                                             </div>
                                                             <div className="col-span-3">
-                                                                <label className="block text-[10px] font-bold text-slate-500 uppercase">Signature Over Printed Name</label>
-                                                                <input className="w-full border-b bg-transparent py-1" value={prof.name} onChange={(e) => handleProfessionalChange(index, 'name', e.target.value)} />
-                                                                
+                                                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mb-1">Name</label>
+                                                                <input className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-philhealth-green/20 outline-none transition-all" value={prof.name} onChange={(e) => handleProfessionalChange(index, 'name', e.target.value)} />
                                                             </div>
                                                         </div>
 
@@ -1090,7 +1148,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                             <label className="flex items-center text-[11px] text-slate-700">
                                                                 <input type="radio" name={`copay-${index}`} checked={!!prof.is_copay} onChange={() => handleProfessionalChange(index, 'is_copay', true)} className="mr-2" />
                                                                 <span>With co-pay P</span>
-                                                                <input className="ml-2 w-24 border-b bg-transparent outline-none" value={prof.copay_amount} onChange={(e) => handleProfessionalChange(index, 'copay_amount', e.target.value)} />
+                                                                <input className="ml-2 w-24 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-philhealth-green/20 outline-none transition-all" value={prof.copay_amount} onChange={(e) => handleProfessionalChange(index, 'copay_amount', e.target.value)} />
                                                             </label>
                                                         </div>
                                                     </div>

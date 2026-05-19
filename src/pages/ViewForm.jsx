@@ -184,6 +184,149 @@ export default function ViewForm({ data, onClose }) {
                                         <ReadOnlyDisplay value={data.admission_diagnosis} isTextArea={true} />
                                     </div>
 
+                                    {/* 8. Special Considerations */}
+                                    {data.special_considerations && (
+                                        <div className="space-y-4 p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">8. Special Considerations</p>
+
+                                            {/* a. Repetitive Procedures */}
+                                            {Object.keys(data.special_considerations.repetitive_procedures || {}).length > 0 && (
+                                                <div className="space-y-2">
+                                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">a. Repetitive Procedures</p>
+                                                    <div className="space-y-2">
+                                                        {Object.entries(data.special_considerations.repetitive_procedures).map(([proc, dates]) => (
+                                                            <div key={proc} className="flex items-start gap-4 p-3 bg-white rounded-xl border border-slate-200/60">
+                                                                <span className="text-[11px] font-black text-slate-700 uppercase w-44 shrink-0">{proc}</span>
+                                                                <div className="flex flex-wrap gap-2">
+                                                                    {dates.map((d, i) => (
+                                                                        <span key={i} className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-[10px] font-bold">{d}</span>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* b. Z-Benefit */}
+                                            {data.special_considerations.z_benefit_code && (
+                                                <div className="space-y-1">
+                                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">b. Z-Benefit Package Code</p>
+                                                    <ReadOnlyDisplay value={String(data.special_considerations.z_benefit_code)} />
+                                                </div>
+                                            )}
+
+                                            {/* c. MCP */}
+                                            {data.special_considerations.mcp_dates?.some(Boolean) && (
+                                                <div className="space-y-2">
+                                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">c. MCP Package (Pre-natal Check-ups)</p>
+                                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                                        {data.special_considerations.mcp_dates.map((d, i) => (
+                                                            <ReadOnlyDisplay key={i} label={`Check-up ${i + 1}`} value={d} />
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* d. TB DOTS */}
+                                            {data.special_considerations.tbdots_package && (
+                                                <div className="space-y-1">
+                                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">d. TB DOTS Package</p>
+                                                    <span className="inline-block px-4 py-2 bg-philhealth-green text-white rounded-lg text-[10px] font-black uppercase">
+                                                        {data.special_considerations.tbdots_package}
+                                                    </span>
+                                                </div>
+                                            )}
+
+                                            {/* e. Animal Bite */}
+                                            {Object.values(data.special_considerations.animal_bite || {}).some(Boolean) && (
+                                                <div className="space-y-2">
+                                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">e. Animal Bite Package</p>
+                                                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                                                        <ReadOnlyDisplay label="Day 0 ARV" value={data.special_considerations.animal_bite.day_0_arv} />
+                                                        <ReadOnlyDisplay label="Day 3 ARV" value={data.special_considerations.animal_bite.day_3_arv} />
+                                                        <ReadOnlyDisplay label="Day 7 ARV" value={data.special_considerations.animal_bite.day_7_arv} />
+                                                        <ReadOnlyDisplay label="RIG"       value={data.special_considerations.animal_bite.rig} />
+                                                        <ReadOnlyDisplay label="Others"    value={data.special_considerations.animal_bite.others} />
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* f. Newborn Care */}
+                                            {data.special_considerations.newborn && Object.values(data.special_considerations.newborn).some(Boolean) && (
+                                                <div className="space-y-2">
+                                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">f. Newborn Care Package</p>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {[
+                                                            { label: 'Essential Newborn Care',          field: 'is_essential' },
+                                                            { label: 'Hearing Screening',               field: 'is_hearing_screening' },
+                                                            { label: 'Newborn Screening',               field: 'is_screening' },
+                                                            { label: 'Immediate Drying',                field: 'is_immediate_drying' },
+                                                            { label: 'Early Skin-to-Skin',              field: 'is_early_skin' },
+                                                            { label: 'Cord Clamping',                   field: 'is_cord_clamping' },
+                                                            { label: 'Eye Prophylaxis',                 field: 'is_eye_prophylaxis' },
+                                                            { label: 'Weighing',                        field: 'is_weighing' },
+                                                            { label: 'Vitamin K',                       field: 'is_vitamink' },
+                                                            { label: 'BCG Vaccination',                 field: 'is_bcg' },
+                                                            { label: 'Non-separation / Breastfeeding',  field: 'is_nonseparation' },
+                                                            { label: 'Hepatitis B Vaccination',         field: 'is_hepaB' },
+                                                        ].filter(({ field }) => data.special_considerations.newborn[field]).map(({ label }) => (
+                                                            <span key={label} className="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] font-black uppercase">
+                                                                ✓ {label}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* g. HIV */}
+                                            {data.special_considerations.hiv_lab_number && (
+                                                <div className="space-y-1">
+                                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">g. HIV/AIDS Treatment — Lab Number</p>
+                                                    <ReadOnlyDisplay value={String(data.special_considerations.hiv_lab_number)} />
+                                                </div>
+                                            )}
+
+                                            {/* Empty state */}
+                                            {!Object.keys(data.special_considerations.repetitive_procedures || {}).length &&
+                                             !data.special_considerations.z_benefit_code &&
+                                             !data.special_considerations.mcp_dates?.some(Boolean) &&
+                                             !data.special_considerations.tbdots_package &&
+                                             !Object.values(data.special_considerations.animal_bite || {}).some(Boolean) &&
+                                             !data.special_considerations.hiv_lab_number &&
+                                             !(data.special_considerations.newborn && Object.values(data.special_considerations.newborn).some(Boolean)) && (
+                                                <p className="text-[11px] text-slate-400 italic">No special considerations recorded.</p>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* 9. PhilHealth Benefits */}
+                                    {(data.philhealth_benefits?.first_case_rate || data.philhealth_benefits?.second_case_rate) && (
+                                        <div className="space-y-3 p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">9. PhilHealth Benefits</p>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                <ReadOnlyDisplay label="First Case Rate"  value={data.philhealth_benefits.first_case_rate} />
+                                                <ReadOnlyDisplay label="Second Case Rate" value={data.philhealth_benefits.second_case_rate} />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* 10. Accreditation / Professionals */}
+                                    {(data.professionals || []).length > 0 && (
+                                        <div className="space-y-3 p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">10. Accreditation / Professional Fees</p>
+                                            <div className="space-y-3">
+                                                {data.professionals.map((prof, i) => (
+                                                    <div key={i} className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-white rounded-xl border border-slate-200/60">
+                                                        <ReadOnlyDisplay label="Accreditation No." value={prof.accreditation_number} />
+                                                        <ReadOnlyDisplay label="Date Signed"       value={prof.date} />
+                                                        <ReadOnlyDisplay label="Co-pay"            value={prof.is_copay ? `₱ ${prof.copay_amount}` : 'No co-pay'} />
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
                                 </div>
                             )}
 
