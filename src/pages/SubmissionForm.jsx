@@ -71,7 +71,48 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
         admission_diagnosis: '',    // free text
 
         // Discharge Diagnosis rows (from discharge_diagnosis table, linked by confinement_id)
-        discharge_diagnoses: [],    // array of objects from DB
+        discharge_diagnoses: [],
+        
+        // array of objects from DB
+        special_considerations: {
+            hemodialysis: { checked: false, dates: '' },
+            blood_transfusion: { checked: false, dates: '' },
+            peritoneal_dialysis: { checked: false, dates: '' },
+            brachytherapy: { checked: false, dates: '' },
+            radiotherapy_linac: { checked: false, dates: '' },
+            chemotherapy: { checked: false, dates: '' },
+            radiotherapy_cobalt: { checked: false, dates: '' },
+            simple_debridement: { checked: false, dates: '' }
+        },
+
+        // Add these inside your initial useState block under special_considerations:
+        packages: {
+            // b. Z-Benefit
+            z_benefit_code: '',
+
+            // c. MCP Package (Pre-natal check-ups)
+            mcp_dates: ['', '', '', ''], // Array for the 4 dates
+
+            // d. TB DOTS Package
+            tb_dots_intensive: false,
+            tb_dots_maintenance: false,
+
+            animal_bite: {
+                day_0_arv: '',
+                day_3_arv: '',
+                day_7_arv: '',
+                rig: '',
+                others: ''
+            }
+
+        },
+
+        philhealth_benefits: {
+            first_case_rate: '',
+            second_case_rate: ''
+        },
+
+        professionals: [],
 
         // ---------------- !!!!! DON'T CHANGE THE PART BELOW !!!!! ---------------- //
         // Part III - Section A
@@ -215,33 +256,213 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
         setPatientResults([]);
         setPatientSelected(true);
 
-        // Also fetch their discharge diagnoses
+        // 1. Fetch discharge diagnoses
         const { data: diagData, error: diagError } = await supabase
             .from('discharge_diagnosis')
             .select('*')
             .eq('confinement_id', record.confinement_id);
 
+        // 2. Fetch the intermediary special_consideration row
+        const { data: considerationRow, error: considerationError } = await supabase
+            .from('special_consideration')
+            .select('*')
+            .eq('confinement_id', record.confinement_id)
+            .maybeSingle();
+
+        const { data: philhealthData, error: phError } = await supabase
+            .from('philhealth_benefits')
+            .select('*')
+            .eq('confinement_id', record.confinement_id)
+            .maybeSingle();
+
+        const { data: profData, error: profError } = await supabase
+            .from('accreditation')
+            .select('*')
+            .eq('confinement_id', record.confinement_id);
+
+        let repData = [];
+        let biteData = [];
+        let mcpData = [];
+        let newbornRows = null;
+        let repError = null;
+
+        // 3. Fetch from all child sub-tables via consideration_id
+        if (considerationRow?.consideration_id) {
+            // Fetch Repetitive Procedures
+            const { data: rData, error: rErr } = await supabase
+                .from('repetitive_procedure')
+                .select('*')
+                .eq('consideration_id', considerationRow.consideration_id);
+            repData = rData || [];
+            repError = rErr;
+
+            // Fetch Animal Bite Package rows
+            const { data: bData } = await supabase
+                .from('animal_bite_package') 
+                .select('*')
+                .eq('consideration_id', considerationRow.consideration_id);
+            biteData = bData || [];
+
+            // Fetch MCP Package rows
+            const { data: mData } = await supabase
+                .from('mcp_package') 
+                .select('*')
+                .eq('consideration_id', considerationRow.consideration_id);
+            mcpData = mData || [];
+
+            // NEW: Fetch Newborn Package row
+            const { data: nData } = await supabase
+                .from('newborn_package') 
+                .select('*')
+                .eq('consideration_id', considerationRow.consideration_id);
+            mcpData = mData || [];
+            newbornRows = nData || []; // Change this to plural
+        }
+
+        // Helper date formatter (converts YYYY-MM-DD to MM-DD-YYYY)
+        const formatDbDate = (dbDate) => {
+            if (!dbDate) return '';
+            const [year, month, day] = dbDate.split('-');
+            return `${month}-${day}-${year}`;
+        };
+
+        // Parser for Repetitive Procedures (Part a)
+        const getProcedureData = (procedureName) => {
+            if (repError || repData.length === 0) return { checked: false, dates: '' };
+            const matches = repData.filter(row => row.procedure?.toLowerCase().trim() === procedureName.toLowerCase().trim());
+            if (matches.length === 0) return { checked: false, dates: '' };
+            return {
+                checked: true,
+                dates: matches.map(row => formatDbDate(row.session_date)).filter(Boolean).join(', ')
+            };
+        };
+
+        // Parser for Animal Bite Vaccines (Part e)
+        const getVaccineDate = (vaccineType) => {
+            const match = biteData.find(row => row.vaccine_type?.toLowerCase().trim() === vaccineType.toLowerCase().trim());
+            return match ? formatDbDate(match.date) : '';
+        };
+
+        const getAnimalBiteOthers = () => {
+            const match = biteData.find(row => row.vaccine_type?.toLowerCase().trim() === 'others');
+            if (!match) return '';
+            return match.others_desc ? `${match.others_desc} (${formatDbDate(match.date)})` : formatDbDate(match.date);
+        };
+
+        // Parser for MCP Pre-natal checkup array mapping (Part c)
+        const getMcpDatesArray = () => {
+            const datesArray = ['', '', '', ''];
+            mcpData.forEach(row => {
+                const checkupNum = parseInt(row.checkup_no, 10);
+                if (checkupNum >= 1 && checkupNum <= 4) {
+                    datesArray[checkupNum - 1] = formatDbDate(row.checkup_date);
+                }
+            });
+            return datesArray;
+        };
+
         setFormData(prev => ({
             ...prev,
-            confinement_id:          record.confinement_id,
-            patient_last_name:       record.last_name || '',
-            patient_first_name:      record.first_name || '',
-            patient_middle_name:     record.middle_name || '',
-            patient_name_extension:  record.name_extension || '',
-            is_referred:             record.is_referred,
-            name_referral:           record.name_referral || '',
-            building_street_referral: record.building_street_re || '', // truncated col name
-            city_referral:           record.city_referral || '',
-            province_referral:       record.province_referral || '',
-            zip_referral:            record.zip_referral || '',
-            date_time_admitted:      record.date_time_admitted || '', // truncated col name
-            date_time_discharged:    record.date_time_discharged || '', // truncated col name
-            disposition:             record.disposition || '',
-            accomodation_type:       record.accomodation_type || '', // truncated col name
-            discharge_diagnoses:     diagError ? [] : (diagData || []),
+            confinement_id:           record.confinement_id,
+            patient_last_name:        record.last_name || '',
+            patient_first_name:       record.first_name || '',
+            patient_middle_name:      record.middle_name || '',
+            patient_name_extension:   record.name_extension || '',
+            is_referred:              record.is_referred,
+            name_referral:            record.name_referral || '',
+            building_street_referral: record.building_street_re || '', 
+            city_referral:            record.city_referral || '',
+            province_referral:        record.province_referral || '',
+            zip_referral:             record.zip_referral || '',
+            date_time_admitted:       record.date_time_admitted || '', 
+            date_time_discharged:     record.date_time_discharged || '', 
+            disposition:              record.disposition || '',
+            accomodation_type:        record.accomodation_type || '', 
+            discharge_diagnoses:      diagError ? [] : (diagData || []),
+
+            // Part a
+            special_considerations: {
+                hemodialysis:        getProcedureData('Hemodialysis'),
+                blood_transfusion:   getProcedureData('Blood Transfusion'),
+                peritoneal_dialysis: getProcedureData('Peritoneal Dialysis'),
+                brachytherapy:       getProcedureData('Brachytherapy'),
+                radiotherapy_linac:  getProcedureData('Radiotherapy (LINAC)'),
+                chemotherapy:        getProcedureData('Chemotherapy'),
+                radiotherapy_cobalt: getProcedureData('Radiotherapy (COBALT)'),
+                simple_debridement:  getProcedureData('Simple Debridement')
+            },
+
+            // Parts b to g
+            packages: {
+                z_benefit_code: considerationRow?.zbenefit_code || '',
+                mcp_dates: getMcpDatesArray(),
+                tb_dots_intensive: considerationRow?.tbdots_package?.toLowerCase() === 'intensive phase',
+                tb_dots_maintenance: considerationRow?.tbdots_package?.toLowerCase() === 'maintenance phase',
+                animal_bite: {
+                    day_0_arv: getVaccineDate('Day 0 ARV'),
+                    day_3_arv: getVaccineDate('Day 3 ARV'),
+                    day_7_arv: getVaccineDate('Day 7 ARV'),
+                    rig:       getVaccineDate('RIG'),
+                    others:    getAnimalBiteOthers()
+                },
+
+                // NEW: Newborn Care Package Mapping
+                newborn: {
+                    is_essential:         newbornRows.some(row => row.is_essential === true || row.is_essential === 'TRUE'),
+                    is_hearing_screening: newbornRows.some(row => row.is_hearing_screening === true || row.is_hearing_screening === 'TRUE'),
+                    is_screening:         newbornRows.some(row => row.is_screening === true || row.is_screening === 'TRUE'),
+                    is_immediate_drying:  newbornRows.some(row => row.is_immediate_drying === true || row.is_immediate_drying === 'TRUE'),
+                    is_early_skin:         newbornRows.some(row => row.is_early_skin === true || row.is_early_skin === 'TRUE'),
+                    is_cord_clamping:      newbornRows.some(row => row.is_cord_clamping === true || row.is_cord_clamping === 'TRUE'),
+                    is_eye_prophylaxis:    newbornRows.some(row => row.is_eye_prophylaxis === true || row.is_eye_prophylaxis === 'TRUE'),
+                    is_weighing:          newbornRows.some(row => row.is_weighing === true || row.is_weighing === 'TRUE'),
+                    is_vitamink:          newbornRows.some(row => row.is_vitamink === true || row.is_vitamink === 'TRUE'),
+                    is_bcg:               newbornRows.some(row => row.is_bcg === true || row.is_bcg === 'TRUE'),
+                    is_nonseparation:     newbornRows.some(row => row.is_nonseparation === true || row.is_nonseparation === 'TRUE'),
+                    is_hepaB:             newbornRows.some(row => row.is_hepaB === true || row.is_hepaB === 'TRUE')
+                },
+
+                // NEW: Outpatient HIV/AIDS Treatment Mapping
+                hiv_lab_number: considerationRow?.hiv_lab_number || '',
+            },
+
+            philhealth_benefits: {
+                first_case_rate: philhealthData?.first_case_rate || '',
+                second_case_rate: philhealthData?.second_case_rate || ''
+            },
+
+            professionals: profData || []
         }));
     };
 
+    const addProfessionalRow = () => {
+        const today = new Date().toISOString().split('T')[0];
+        setFormData(prev => ({
+            ...prev,
+            professionals: [
+                ...prev.professionals, 
+                { accreditation_number: '', name: '', date: today, is_copay: false, copay_amount: '' }
+            ]
+        }));
+    };
+    
+    const handleProfessionalChange = (index, field, value) => {
+        setFormData(prev => {
+            const updatedProfessionals = [...prev.professionals];
+            updatedProfessionals[index] = { 
+                ...updatedProfessionals[index], 
+                [field]: value 
+            };
+            return { ...prev, professionals: updatedProfessionals };
+        });
+    };
+
+    const removeProfessionalRow = (index) => {
+        setFormData(prev => ({
+            ...prev,
+            professionals: prev.professionals.filter((_, i) => i !== index)
+        }));
+    };
     // STEPPER AREA
     const nextStep = () => {
         if (!isStepValid()) {
@@ -584,6 +805,296 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                         </table>
                                                     </div>
                                                 )}
+                                            </div>
+
+                                            {/* --- NEW ADDITION: 8. Special Considerations --- */}
+                                            <div className="space-y-4 p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                                                <div className="space-y-1">
+                                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">8. Special Considerations</p>
+                                                    <p className="text-[10px] text-slate-400 italic font-medium leading-relaxed">
+                                                        a. For the following repetitive procedures, check box that applies and enumerate the procedure/sessions dates [mm-dd-yyyy]. For chemotherapy, see guidelines.
+                                                    </p>
+                                                </div>
+
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 pt-2">
+                                                    {[
+                                                        { id: 'hemodialysis', label: 'Hemodialysis' },
+                                                        { id: 'blood_transfusion', label: 'Blood Transfusion' },
+                                                        { id: 'peritoneal_dialysis', label: 'Peritoneal Dialysis' },
+                                                        { id: 'brachytherapy', label: 'Brachytherapy' },
+                                                        { id: 'radiotherapy_linac', label: 'Radiotherapy (LINAC)' },
+                                                        { id: 'chemotherapy', label: 'Chemotherapy' },
+                                                        { id: 'radiotherapy_cobalt', label: 'Radiotherapy (COBALT)' },
+                                                        { id: 'simple_debridement', label: 'Simple Debridement' }
+                                                    ].map((proc) => {
+                                                        const isChecked = !!formData.special_considerations?.[proc.id]?.checked;
+                                                        const datesValue = formData.special_considerations?.[proc.id]?.dates || '';
+
+                                                        return (
+                                                            <div key={proc.id} className="flex items-start gap-4 p-4 bg-white rounded-xl border border-slate-200/60 shadow-sm transition-all">
+                                                                <div className="flex items-center h-10">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        id={proc.id}
+                                                                        checked={isChecked}
+                                                                        disabled
+                                                                        className="w-4 h-4 rounded text-philhealth-green border-slate-300 focus:ring-philhealth-green/20 accent-emerald-600 disabled:opacity-80"
+                                                                    />
+                                                                </div>
+                                                                <div className="flex-1 space-y-1.5">
+                                                                    <label htmlFor={proc.id} className="text-[11px] font-black text-slate-700 uppercase tracking-wide">
+                                                                        {proc.label}
+                                                                    </label>
+                                                                    <input
+                                                                        type="text"
+                                                                        value={datesValue}
+                                                                        placeholder="—"
+                                                                        disabled
+                                                                        className="w-full px-3 py-2 bg-slate-50/50 border border-slate-200 rounded-lg text-xs font-bold text-slate-600 tracking-wide outline-none disabled:bg-slate-50/50 disabled:text-slate-500"
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                                {/* b. Z-Benefit Package */}
+                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center p-4 bg-white rounded-xl border border-slate-200/60 shadow-sm">
+                                                    <div className="text-[11px] font-black text-slate-700 uppercase tracking-wide">
+                                                        b. For Z-Benefit Package
+                                                    </div>
+                                                    <div className="md:col-span-2">
+                                                        <FormInput 
+                                                            label="Z-Benefit Package Code" 
+                                                            value={formData.packages?.z_benefit_code} 
+                                                            disabled 
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                {/* c. MCP Package */}
+                                                <div className="space-y-2 p-4 bg-white rounded-xl border border-slate-200/60 shadow-sm">
+                                                    <p className="text-[11px] font-black text-slate-700 uppercase tracking-wide">
+                                                        c. For MCP Package <span className="text-[10px] text-slate-400 font-medium normal-case italic">(enumerate four dates [mm-dd-year] of pre-natal check-ups)</span>
+                                                    </p>
+                                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                                        {[1, 2, 3, 4].map((num, idx) => (
+                                                            <FormInput 
+                                                                key={num}
+                                                                label={`Check-up ${num}`} 
+                                                                value={formData.packages?.mcp_dates?.[idx] || ''} 
+                                                                disabled 
+                                                            />
+                                                        ))}
+                                                    </div>
+                                                </div>
+
+                                                {/* d. TB DOTS Package */}
+                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center p-4 bg-white rounded-xl border border-slate-200/60 shadow-sm">
+                                                    <div className="text-[11px] font-black text-slate-700 uppercase tracking-wide">
+                                                        d. For TB DOTS Package
+                                                    </div>
+                                                    <div className="flex gap-6 md:col-span-2">
+                                                        <label className="flex items-center gap-2.5 text-xs font-bold text-slate-600 cursor-not-allowed">
+                                                            <input 
+                                                                type="checkbox" 
+                                                                checked={!!formData.packages?.tb_dots_intensive} 
+                                                                disabled 
+                                                                className="w-4 h-4 rounded text-philhealth-green border-slate-300 accent-emerald-600" 
+                                                            />
+                                                            Intensive Phase
+                                                        </label>
+                                                        <label className="flex items-center gap-2.5 text-xs font-bold text-slate-600 cursor-not-allowed">
+                                                            <input 
+                                                                type="checkbox" 
+                                                                checked={!!formData.packages?.tb_dots_maintenance} 
+                                                                disabled 
+                                                                className="w-4 h-4 rounded text-philhealth-green border-slate-300 accent-emerald-600" 
+                                                            />
+                                                            Maintenance Phase
+                                                        </label>
+                                                    </div>
+                                                </div>
+
+                                                {/* e. Animal Bite Package */}
+                                                <div className="space-y-3 p-4 bg-white rounded-xl border border-slate-200/60 shadow-sm">
+                                                    <div className="flex justify-between items-center">
+                                                        <p className="text-[11px] font-black text-slate-700 uppercase tracking-wide">
+                                                            e. For Animal Bite Package <span className="text-[10px] text-slate-400 font-medium normal-case italic">(vaccine session dates)</span>
+                                                        </p>
+                                                        <span className="text-[9px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase tracking-wide">
+                                                            ARV / RIG
+                                                        </span>
+                                                    </div>
+                                                    
+                                                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                                                        <FormInput label="Day 0 ARV" value={formData.packages?.animal_bite?.day_0_arv} disabled />
+                                                        <FormInput label="Day 3 ARV" value={formData.packages?.animal_bite?.day_3_arv} disabled />
+                                                        <FormInput label="Day 7 ARV" value={formData.packages?.animal_bite?.day_7_arv} disabled />
+                                                        <FormInput label="RIG"       value={formData.packages?.animal_bite?.rig}       disabled />
+                                                        <FormInput label="Others (Specify)" value={formData.packages?.animal_bite?.others} disabled />
+                                                    </div>
+                                                </div>
+
+                                                {/* f. Newborn Care Package */}
+                                                <div className="space-y-4 p-4 bg-white rounded-xl border border-slate-200/60 shadow-sm">
+                                                    <div className="text-[11px] font-black text-slate-700 uppercase tracking-wide">
+                                                        f. For Newborn Care Package
+                                                    </div>
+                                                    
+                                                    {/* Main Parent Row Options */}
+                                                    <div className="flex flex-wrap gap-6 px-2 py-1 bg-slate-50 rounded-lg border border-slate-100">
+                                                        <label className="flex items-center gap-2.5 text-xs font-bold text-slate-600 cursor-not-allowed">
+                                                            <input type="checkbox" checked={!!formData.packages?.newborn?.is_essential} disabled className="w-4 h-4 rounded text-philhealth-green border-slate-300 accent-emerald-600" />
+                                                            Essential Newborn Care
+                                                        </label>
+                                                        <label className="flex items-center gap-2.5 text-xs font-bold text-slate-600 cursor-not-allowed">
+                                                            <input type="checkbox" checked={!!formData.packages?.newborn?.is_hearing_screening} disabled className="w-4 h-4 rounded text-philhealth-green border-slate-300 accent-emerald-600" />
+                                                            Newborn Hearing Screening Test
+                                                        </label>
+                                                        <label className="flex items-center gap-2.5 text-xs font-bold text-slate-600 cursor-not-allowed">
+                                                            <input type="checkbox" checked={!!formData.packages?.newborn?.is_screening} disabled className="w-4 h-4 rounded text-philhealth-green border-slate-300 accent-emerald-600" />
+                                                            Newborn Screening Test
+                                                        </label>
+                                                    </div>
+
+                                                    {/* Sub-section: For Essential Newborn Care */}
+                                                    <div className="p-4 rounded-xl border border-dashed border-slate-200 bg-white space-y-3">
+                                                        <p className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
+                                                            For Essential Newborn Care <span className="text-[9px] text-slate-400 font-medium normal-case italic">(applicable components)</span>
+                                                        </p>
+                                                        
+                                                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5 pl-1">
+                                                            <label className="flex items-center gap-2 text-xs font-medium text-slate-600 cursor-not-allowed">
+                                                                <input type="checkbox" checked={!!formData.packages?.newborn?.is_immediate_drying} disabled className="w-3.5 h-3.5 rounded border-slate-300 text-emerald-600" />
+                                                                Immediate drying of newborn
+                                                            </label>
+                                                            <label className="flex items-center gap-2 text-xs font-medium text-slate-600 cursor-not-allowed">
+                                                                <input type="checkbox" checked={!!formData.packages?.newborn?.is_early_skin} disabled className="w-3.5 h-3.5 rounded border-slate-300 text-emerald-600" />
+                                                                Early skin-to-skin contact
+                                                            </label>
+                                                            <label className="flex items-center gap-2 text-xs font-medium text-slate-600 cursor-not-allowed">
+                                                                <input type="checkbox" checked={!!formData.packages?.newborn?.is_cord_clamping} disabled className="w-3.5 h-3.5 rounded border-slate-300 text-emerald-600" />
+                                                                Timely cord clamping
+                                                            </label>
+                                                            <label className="flex items-center gap-2 text-xs font-medium text-slate-600 cursor-not-allowed">
+                                                                <input type="checkbox" checked={!!formData.packages?.newborn?.is_eye_prophylaxis} disabled className="w-3.5 h-3.5 rounded border-slate-300 text-emerald-600" />
+                                                                Eye Prophylaxis
+                                                            </label>
+                                                            <label className="flex items-center gap-2 text-xs font-medium text-slate-600 cursor-not-allowed">
+                                                                <input type="checkbox" checked={!!formData.packages?.newborn?.is_weighing} disabled className="w-3.5 h-3.5 rounded border-slate-300 text-emerald-600" />
+                                                                Weighing of the newborn
+                                                            </label>
+                                                            <label className="flex items-center gap-2 text-xs font-medium text-slate-600 cursor-not-allowed">
+                                                                <input type="checkbox" checked={!!formData.packages?.newborn?.is_vitamink} disabled className="w-3.5 h-3.5 rounded border-slate-300 text-emerald-600" />
+                                                                Vitamin K administration
+                                                            </label>
+                                                            <label className="flex items-center gap-2 text-xs font-medium text-slate-600 cursor-not-allowed">
+                                                                <input type="checkbox" checked={!!formData.packages?.newborn?.is_bcg} disabled className="w-3.5 h-3.5 rounded border-slate-300 text-emerald-600" />
+                                                                BCG vaccination
+                                                            </label>
+                                                            <label className="flex items-center gap-2 text-xs font-medium text-slate-600 cursor-not-allowed">
+                                                                <input type="checkbox" checked={!!formData.packages?.newborn?.is_nonseparation} disabled className="w-3.5 h-3.5 rounded border-slate-300 text-emerald-600" />
+                                                                Non-separation / Breastfeeding
+                                                            </label>
+                                                            <label className="flex items-center gap-2 text-xs font-medium text-slate-600 cursor-not-allowed">
+                                                                <input type="checkbox" checked={!!formData.packages?.newborn?.is_hepaB} disabled className="w-3.5 h-3.5 rounded border-slate-300 text-emerald-600" />
+                                                                Hepatitis B vaccination
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* g. Outpatient HIV/AIDS Treatment Package */}
+                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center p-4 bg-white rounded-xl border border-slate-200/60 shadow-sm">
+                                                    <div className="text-[11px] font-black text-slate-700 uppercase tracking-wide">
+                                                        g. For Outpatient HIV/AIDS Treatment Package
+                                                    </div>
+                                                    <div className="md:col-span-2">
+                                                        <FormInput 
+                                                            label="Laboratory Number" 
+                                                            value={formData.packages?.hiv_lab_number} 
+                                                            disabled 
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* --- 9. PhilHealth Benefits Section --- */}
+                                            <div className="space-y-3 p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">9. PhilHealth Benefits</p>
+
+                                                <div className="p-6 bg-slate-50/50 grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                    <FormInput 
+                                                        label="First Case Rate" 
+                                                        value={formData.philhealth_benefits?.first_case_rate || ''} 
+                                                        disabled 
+                                                    />
+                                                    <FormInput 
+                                                        label="Second Case Rate" 
+                                                        value={formData.philhealth_benefits?.second_case_rate || ''} 
+                                                        disabled 
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* --- 10. Accreditation Number/Professional Fees Section --- */}
+                                            <div className="space-y-3 p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                                                <div className="flex justify-between items-center border-b border-slate-200 pb-4">
+                                                    <div>
+                                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">
+                                                            10. Accreditation 
+                                                        </p>
+                                                    </div>
+                                                    <button 
+                                                        type="button"
+                                                        onClick={addProfessionalRow}
+                                                        className="text-[10px] px-3 py-1.5 bg-philhealth-green text-white rounded-md hover:shadow-philhealth-green/30 font-bold uppercase transition"
+                                                    >
+                                                        + Add Professional
+                                                    </button>
+                                                </div>
+
+                                                {formData.professionals.map((prof, index) => (
+                                                    <div key={index} className="relative grid grid-cols-12 gap-4 p-4 bg-slate-50 rounded-xl items-start border border-slate-100 hover:border-slate-200 transition">
+                                                        
+                                                        <button 
+                                                            type="button"
+                                                            onClick={() => removeProfessionalRow(index)}
+                                                            className="absolute top-2 right-2 text-red-400 hover:text-red-600 text-[9px] font-bold uppercase"
+                                                        >
+                                                            Remove
+                                                        </button>
+
+                                                        <div className="col-span-12 md:col-span-7 grid grid-cols-3 gap-3">
+                                                            <div className="col-span-1">
+                                                                <label className="block text-[10px] font-bold text-slate-500 uppercase">Date Signed</label>
+                                                                <input type="date" className="w-full border-b bg-transparent py-1" value={prof.date} onChange={(e) => handleProfessionalChange(index, 'date', e.target.value)} />
+                                                                
+                                                            </div>
+                                                            <div className="col-span-2">
+                                                                <label className="block text-[10px] font-bold text-slate-500 uppercase">Accreditation No.</label>
+                                                                <input className="w-full border-b bg-transparent py-1" value={prof.accreditation_number} onChange={(e) => handleProfessionalChange(index, 'accreditation_number', e.target.value)} />
+                                                            </div>
+                                                            <div className="col-span-3">
+                                                                <label className="block text-[10px] font-bold text-slate-500 uppercase">Signature Over Printed Name</label>
+                                                                <input className="w-full border-b bg-transparent py-1" value={prof.name} onChange={(e) => handleProfessionalChange(index, 'name', e.target.value)} />
+                                                                
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="col-span-12 md:col-span-5 flex flex-col pt-1 gap-2 border-l border-slate-200 pl-4">
+                                                            <label className="flex items-center text-[11px] cursor-pointer text-slate-700">
+                                                                <input type="radio" name={`copay-${index}`} checked={!prof.is_copay} onChange={() => handleProfessionalChange(index, 'is_copay', false)} className="mr-2" />
+                                                                No co-pay on top of PhilHealth Benefit
+                                                            </label>
+                                                            <label className="flex items-center text-[11px] text-slate-700">
+                                                                <input type="radio" name={`copay-${index}`} checked={!!prof.is_copay} onChange={() => handleProfessionalChange(index, 'is_copay', true)} className="mr-2" />
+                                                                <span>With co-pay P</span>
+                                                                <input className="ml-2 w-24 border-b bg-transparent outline-none" value={prof.copay_amount} onChange={(e) => handleProfessionalChange(index, 'copay_amount', e.target.value)} />
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                ))}
                                             </div>
                                         </motion.div>
                                     )}

@@ -184,37 +184,6 @@ export default function ViewForm({ data, onClose }) {
                                         <ReadOnlyDisplay value={data.admission_diagnosis} isTextArea={true} />
                                     </div>
 
-                                    {/* 7. Discharge Diagnoses */}
-                                    <div className="space-y-3">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">7. Discharge Diagnosis/es</p>
-                                        {(!data.discharge_diagnoses || data.discharge_diagnoses.length === 0) ? (
-                                            <p className="text-xs text-slate-400 italic px-1">No discharge diagnoses on record.</p>
-                                        ) : (
-                                            <div className="overflow-x-auto rounded-xl border border-slate-100">
-                                                <table className="w-full text-[10px]">
-                                                    <thead className="bg-slate-50 border-b border-slate-100">
-                                                    <tr>
-                                                        {['Diagnosis','ICD-10 Code','Related Procedure','RVS Code','Date of Procedure','Laterality'].map(h => (
-                                                            <th key={h} className="px-4 py-3 text-left font-black text-slate-400 uppercase tracking-wider">{h}</th>
-                                                        ))}
-                                                    </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                    {data.discharge_diagnoses.map((d, i) => (
-                                                        <tr key={d.diagnosis_id} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
-                                                            <td className="px-4 py-3 font-bold text-slate-700">{d.diagnosis || '—'}</td>
-                                                            <td className="px-4 py-3 text-slate-500">{d.icd_code || '—'}</td>
-                                                            <td className="px-4 py-3 text-slate-500">{d.related_procedure || '—'}</td>
-                                                            <td className="px-4 py-3 text-slate-500">{d.rvs_code || '—'}</td>
-                                                            <td className="px-4 py-3 text-slate-500">{d.procedure_date || '—'}</td>
-                                                            <td className="px-4 py-3 text-slate-500">{d.laterality || '—'}</td>
-                                                        </tr>
-                                                    ))}
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        )}
-                                    </div>
                                 </div>
                             )}
 
