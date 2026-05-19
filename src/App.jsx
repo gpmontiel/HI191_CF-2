@@ -109,72 +109,176 @@ export default function App() {
   const handleNewSubmission = () => setView('form');
   const handleCancelSubmission = () => setView('dashboard');
 
-  // Unified submission pipeline pushing directly to your Supabase schema
+  // // Unified submission pipeline pushing directly to your Supabase schema
+  // const handleSupabaseSubmit = async (data) => {
+  //   try {
+  //     setIsLoading(true);
+  //     const parseNum = (val) => val ? parseFloat(val) : null;
+  //     const parseDate = (val) => val ? val : null;
+  //
+  //     // 1. Submit Part 3
+  //     const { error: part3Error } = await supabase
+  //         .from('Part3_Consumption_Consent')
+  //         .insert([
+  //           {
+  //             is_benefit_enough: data.certifiedEnough,
+  //             enough_hci_fees: parseNum(data.hciFeesEnough),
+  //             enough_pf_fees: parseNum(data.pfFeesEnough),
+  //             enough_grand_total: parseNum(data.grandTotalEnough),
+  //             is_benefit_consumed_or_with_purchases: data.consumedPrior,
+  //             hci_actual_charges: parseNum(data.hciActualCharges),
+  //             hci_discount_amount: parseNum(data.hciDiscount),
+  //             hci_philhealth_benefit: parseNum(data.hciPhilhealthBenefit),
+  //             hci_copay_amount: parseNum(data.hciAfterDeductionAmount),
+  //             hci_paid_by_member: data.hciDeductionPayers?.member || false,
+  //             hci_paid_by_hmo: data.hciDeductionPayers?.hmo || false,
+  //             hci_paid_by_others: data.hciDeductionPayers?.others || false,
+  //             pf_actual_charges: parseNum(data.pfActualCharges),
+  //             pf_discount_amount: parseNum(data.pfDiscount),
+  //             pf_philhealth_benefit: parseNum(data.pfPhilhealthBenefit),
+  //             pf_copay_amount: parseNum(data.pfAfterDeductionAmount),
+  //             pf_paid_by_member: data.pfDeductionPayers?.member || false,
+  //             pf_paid_by_hmo: data.pfDeductionPayers?.hmo || false,
+  //             pf_paid_by_others: data.pfDeductionPayers?.others || false,
+  //             drugs_cost_type: data.drugsCostType,
+  //             drugs_amount: parseNum(data.drugsAmount),
+  //             diagnostic_cost_type: data.diagnosticCostType,
+  //             diagnostic_amount: parseNum(data.diagnosticAmount),
+  //             representative_name: data.representativeName,
+  //             consent_date_signed: parseDate(data.representativeDateSigned),
+  //             representative_relationship: data.representativeRelationship,
+  //             representative_relationship_others: data.representativeRelationshipSpecify,
+  //             signing_behalf_reason: data.behalfReason,
+  //             signing_behalf_reason_others: data.behalfReasonSpecify,
+  //             consent_medical_records: data.consentMedicalRecords,
+  //             consent_liability_free: data.consentLiabilityFree
+  //           }
+  //         ]);
+  //
+  //     if (part3Error) throw part3Error;
+  //
+  //     // 2. Submit Part 4
+  //     const { error: part4Error } = await supabase
+  //         .from('Part4_Certification')
+  //         .insert([
+  //           {
+  //             hci_name: data.hci_name,
+  //             designation: data.designation,
+  //             date: parseDate(data.date_signed),
+  //             is_certified: data.finalCertification
+  //           }
+  //         ]);
+  //
+  //     if (part4Error) throw part4Error;
+  //
+  //     // 3. Optional: Insert row to ClaimForms2 table if it isn't automatically created by a database trigger
+  //
+  //     alert('Form submitted successfully to Supabase!');
+  //     setView('dashboard'); // Redirecting triggers the tracking hook to refresh lists automatically
+  //   } catch (error) {
+  //     console.error('Supabase Insert Error:', error);
+  //     alert(`Error saving to database: ${error.message}`);
+  //   } finally {
+  //     setIsLoading(false);
+  //   }
+  // };
+
+  // *---------------- not sure just trying to see if it works (submission) ----------------------------
   const handleSupabaseSubmit = async (data) => {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+
+    if (!authUser) throw new Error('No authenticated user found. Please log in again.');
     try {
       setIsLoading(true);
       const parseNum = (val) => val ? parseFloat(val) : null;
       const parseDate = (val) => val ? val : null;
 
-      // 1. Submit Part 3
-      const { error: part3Error } = await supabase
+      // ---- PART III insert first, get its ID ----
+      const { data: part3Data, error: part3Error } = await supabase
           .from('Part3_Consumption_Consent')
-          .insert([
-            {
-              is_benefit_enough: data.certifiedEnough,
-              enough_hci_fees: parseNum(data.hciFeesEnough),
-              enough_pf_fees: parseNum(data.pfFeesEnough),
-              enough_grand_total: parseNum(data.grandTotalEnough),
-              is_benefit_consumed_or_with_purchases: data.consumedPrior,
-              hci_actual_charges: parseNum(data.hciActualCharges),
-              hci_discount_amount: parseNum(data.hciDiscount),
-              hci_philhealth_benefit: parseNum(data.hciPhilhealthBenefit),
-              hci_copay_amount: parseNum(data.hciAfterDeductionAmount),
-              hci_paid_by_member: data.hciDeductionPayers?.member || false,
-              hci_paid_by_hmo: data.hciDeductionPayers?.hmo || false,
-              hci_paid_by_others: data.hciDeductionPayers?.others || false,
-              pf_actual_charges: parseNum(data.pfActualCharges),
-              pf_discount_amount: parseNum(data.pfDiscount),
-              pf_philhealth_benefit: parseNum(data.pfPhilhealthBenefit),
-              pf_copay_amount: parseNum(data.pfAfterDeductionAmount),
-              pf_paid_by_member: data.pfDeductionPayers?.member || false,
-              pf_paid_by_hmo: data.pfDeductionPayers?.hmo || false,
-              pf_paid_by_others: data.pfDeductionPayers?.others || false,
-              drugs_cost_type: data.drugsCostType,
-              drugs_amount: parseNum(data.drugsAmount),
-              diagnostic_cost_type: data.diagnosticCostType,
-              diagnostic_amount: parseNum(data.diagnosticAmount),
-              representative_name: data.representativeName,
-              consent_date_signed: parseDate(data.representativeDateSigned),
-              representative_relationship: data.representativeRelationship,
-              representative_relationship_others: data.representativeRelationshipSpecify,
-              signing_behalf_reason: data.behalfReason,
-              signing_behalf_reason_others: data.behalfReasonSpecify,
-              consent_medical_records: data.consentMedicalRecords,
-              consent_liability_free: data.consentLiabilityFree
-            }
-          ]);
+          .insert([{
+            is_benefit_enough:                  data.certifiedEnough,
+            enough_hci_fees:                    parseNum(data.hciFeesEnough),
+            enough_pf_fees:                     parseNum(data.pfFeesEnough),
+            enough_grand_total:                 parseNum(data.grandTotalEnough),
+            is_benefit_consumed_or_with_purchases: data.consumedPrior,
+            hci_actual_charges:                 parseNum(data.hciActualCharges),
+            hci_discount_amount:                parseNum(data.hciDiscount),
+            hci_philhealth_benefit:             parseNum(data.hciPhilhealthBenefit),
+            hci_copay_amount:                   parseNum(data.hciAfterDeductionAmount),
+            hci_paid_by_member:                 data.hciDeductionPayers.member,
+            hci_paid_by_hmo:                    data.hciDeductionPayers.hmo,
+            hci_paid_by_others:                 data.hciDeductionPayers.others,
+            pf_actual_charges:                  parseNum(data.pfActualCharges),
+            pf_discount_amount:                 parseNum(data.pfDiscount),
+            pf_philhealth_benefit:              parseNum(data.pfPhilhealthBenefit),
+            pf_copay_amount:                    parseNum(data.pfAfterDeductionAmount),
+            pf_paid_by_member:                  data.pfDeductionPayers.member,
+            pf_paid_by_hmo:                     data.pfDeductionPayers.hmo,
+            pf_paid_by_others:                  data.pfDeductionPayers.others,
+            drugs_cost_type:                    data.drugsCostType,
+            drugs_amount:                       parseNum(data.drugsAmount),
+            diagnostic_cost_type:               data.diagnosticCostType,
+            diagnostic_amount:                  parseNum(data.diagnosticAmount),
+            representative_name:                data.representativeName,
+            consent_date_signed:                parseDate(data.representativeDateSigned),
+            representative_relationship:        data.representativeRelationship,
+            representative_relationship_others: data.representativeRelationshipSpecify,
+            signing_behalf_reason:              data.behalfReason,
+            signing_behalf_reason_others:       data.behalfReasonSpecify,
+            consent_medical_records:            data.consentMedicalRecords,
+            consent_liability_free:             data.consentLiabilityFree,
+          }])
+          .select()
+          .single();
 
       if (part3Error) throw part3Error;
 
-      // 2. Submit Part 4
-      const { error: part4Error } = await supabase
+      // ---- PART IV insert, get its ID ----
+      const { data: part4Data, error: part4Error } = await supabase
           .from('Part4_Certification')
-          .insert([
-            {
-              hci_name: data.hci_name,
-              designation: data.designation,
-              date: parseDate(data.date_signed),
-              is_certified: data.finalCertification
-            }
-          ]);
+          .insert([{
+            hci_name:     data.hci_name,
+            designation:  data.designation,
+            date:         parseDate(data.date_signed),
+            is_certified: data.finalCertification,
+          }])
+          .select()
+          .single();
 
       if (part4Error) throw part4Error;
 
-      // 3. Optional: Insert row to ClaimForms2 table if it isn't automatically created by a database trigger
+      // ---- ClaimForms2 master record — ties everything together ----
+      const { data: cf2Data, error: cf2Error } = await supabase
+          .from('ClaimForms2')
+          .insert([{
+            user_id:          authUser.id,
+            hci_id:           data.hci_id          || null,
+            confinement_id:   data.confinement_id  || null,
+            form2_id:         part3Data.id          || null, // FK to Part3
+            certification_id: part4Data.id          || null, // FK to Part4
+            status:           'Pending',
+            // date_submitted and user_id have DB defaults, no need to pass them
+          }])
+          .select()
+          .single();
 
-      alert('Form submitted successfully to Supabase!');
-      setView('dashboard'); // Redirecting triggers the tracking hook to refresh lists automatically
+      if (cf2Error) throw cf2Error;
+
+      // Update local state so dashboard shows the new row immediately
+      const newForm = {
+        id:               cf2Data.cf2_id,
+        patient_name:     `${data.patient_last_name}, ${data.patient_first_name}`,
+        form_type:        'CF2 Claim',
+        status:           'Pending',
+        submission_date:  new Date().toISOString().split('T')[0],
+        physician_id:     '1',
+      };
+      setForms(prev => [newForm, ...prev]);
+
+      alert('Form submitted successfully!');
+      setView('dashboard');
+
     } catch (error) {
       console.error('Supabase Insert Error:', error);
       alert(`Error saving to database: ${error.message}`);
@@ -182,6 +286,7 @@ export default function App() {
       setIsLoading(false);
     }
   };
+
 
   if (!user) return <LoginForm onLogin={handleLogin} isLoading={isLoading} />;
 
@@ -193,6 +298,7 @@ export default function App() {
           .select(`
           cf2_id,
           status,
+          hci_info (*),
           confinement_info (*),
           Part3_Consumption_Consent (*),
           Part4_Certification (*)
@@ -210,15 +316,34 @@ export default function App() {
         // Build object exactly mapping props inside ViewForm
         const mappedDocumentProfile = {
           id: data.cf2_id,
-          patient_name: patient ? `${patient.last_name}, ${patient.first_name}` : '',
-          philhealth_id: patient.philhealth_id || '',
-          age: patient.age || '',
-          sex: patient.sex || '',
-          diagnosis: patient.diagnosis || '',
-          icd10_code: patient.icd10_code || '',
-          admission_date: patient.admission_date || '',
 
-          certifiedEnough: part3.is_benefit_enough || false,
+          // Official part I and II
+            // Part I - HCI
+            hci_name_institution: data.hci_info?.hci_name || '',
+            pan_number:           data.hci_info?.pan_number || '',
+            hci_address_street:   data.hci_info?.hci_address_street || '',
+            hci_address_city:     data.hci_info?.hci_address_city || '',
+            hci_address_province: data.hci_info?.hci_address_province || '',
+
+            // Part II - Patient
+            patient_last_name:       patient.last_name || '',
+            patient_first_name:      patient.first_name || '',
+            patient_middle_name:     patient.middle_name || '',
+            patient_name_extension:  patient.name_extension || '',
+            is_referred:             patient.is_referred,
+            name_referral:           patient.name_referral || '',
+            building_street_referral: patient.building_street_re || '',
+            city_referral:           patient.city_referral || '',
+            province_referral:       patient.province_referral || '',
+            zip_referral:            patient.zip_referral || '',
+            date_time_admitted:      patient.date_time_admitted || '',
+            date_time_discharged:    patient.date_time_discharged || '',
+            disposition:             patient.disposition || '',
+            accomodation_type:       patient.accomodation_type || '',
+            admission_diagnosis:     patient.admission_diagnosis || '',
+
+
+            certifiedEnough: part3.is_benefit_enough || false,
           hciFeesEnough: part3.enough_hci_fees || '',
           pfFeesEnough: part3.enough_pf_fees || '',
           consumedPrior: part3.is_benefit_consumed_or_with_purchases || false,

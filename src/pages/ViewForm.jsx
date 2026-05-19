@@ -97,21 +97,123 @@ export default function ViewForm({ data, onClose }) {
                         >
                             {/* PART I */}
                             {currentStep === 1 && (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                    <ReadOnlyDisplay label="Full Name of Patient" value={data.patient_name} />
-                                    <ReadOnlyDisplay label="PhilHealth ID" value={data.philhealth_id} />
-                                    <ReadOnlyDisplay label="Age" value={data.age ? `${data.age} Years Old` : ''} />
-                                    <ReadOnlyDisplay label="Patient Sex" value={data.sex} />
+                                <div className="space-y-6">
+                                    <div className="p-6 bg-emerald-50/50 rounded-2xl border border-emerald-100 grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <ReadOnlyDisplay label="HCI Name"                           value={data.hci_name_institution} />
+                                        <ReadOnlyDisplay label="PhilHealth Accreditation No. (PAN)" value={data.pan_number} />
+                                        <ReadOnlyDisplay label="Street Address"                     value={data.hci_address_street} />
+                                        <ReadOnlyDisplay label="City / Municipality"                value={data.hci_address_city} />
+                                        <ReadOnlyDisplay label="Province / Region"                  value={data.hci_address_province} />
+                                    </div>
                                 </div>
                             )}
 
                             {/* PART II */}
                             {currentStep === 2 && (
                                 <div className="space-y-8">
-                                    <ReadOnlyDisplay label="Diagnosis" value={data.diagnosis} isTextArea={true} />
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                        <ReadOnlyDisplay label="ICD-10 Code" value={data.icd10_code} />
-                                        <ReadOnlyDisplay label="Admission Date" value={data.admission_date} />
+
+                                    {/* 1. Name */}
+                                    <div className="space-y-3">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">1. Name of Patient</p>
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-6 bg-emerald-50/50 rounded-2xl border border-emerald-100">
+                                            <ReadOnlyDisplay label="Last Name"      value={data.patient_last_name} />
+                                            <ReadOnlyDisplay label="First Name"     value={data.patient_first_name} />
+                                            <ReadOnlyDisplay label="Name Extension" value={data.patient_name_extension} />
+                                            <ReadOnlyDisplay label="Middle Name"    value={data.patient_middle_name} />
+                                        </div>
+                                    </div>
+
+                                    {/* 2. Referred */}
+                                    <div className="space-y-3 p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">
+                                            2. Was patient referred by another HCI?
+                                        </p>
+                                        <div className="flex gap-4">
+                                            <span className={`px-4 py-2 rounded-lg text-xs font-black uppercase border ${data.is_referred === false ? 'bg-philhealth-green text-white border-philhealth-green' : 'bg-white text-slate-300 border-slate-200'}`}>No</span>
+                                            <span className={`px-4 py-2 rounded-lg text-xs font-black uppercase border ${data.is_referred === true  ? 'bg-philhealth-green text-white border-philhealth-green' : 'bg-white text-slate-300 border-slate-200'}`}>Yes</span>
+                                        </div>
+                                        {data.is_referred && (
+                                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 pt-3">
+                                                <ReadOnlyDisplay label="Referring HCI"       value={data.name_referral} />
+                                                <ReadOnlyDisplay label="Building / Street"   value={data.building_street_referral} />
+                                                <ReadOnlyDisplay label="City / Municipality" value={data.city_referral} />
+                                                <ReadOnlyDisplay label="Province"            value={data.province_referral} />
+                                                <ReadOnlyDisplay label="Zip Code"            value={data.zip_referral} />
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* 3. Confinement Period */}
+                                    <div className="space-y-3 p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">3. Confinement Period</p>
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                            <ReadOnlyDisplay label="Date Admitted"   value={data.date_time_admitted   ? new Date(data.date_time_admitted).toLocaleDateString('en-PH',   { year:'numeric', month:'long', day:'numeric' }) : ''} />
+                                            <ReadOnlyDisplay label="Time Admitted"   value={data.date_time_admitted   ? new Date(data.date_time_admitted).toLocaleTimeString('en-PH',   { hour:'numeric', minute:'2-digit', hour12:true }) : ''} />
+                                            <ReadOnlyDisplay label="Date Discharged" value={data.date_time_discharged ? new Date(data.date_time_discharged).toLocaleDateString('en-PH', { year:'numeric', month:'long', day:'numeric' }) : ''} />
+                                            <ReadOnlyDisplay label="Time Discharged" value={data.date_time_discharged ? new Date(data.date_time_discharged).toLocaleTimeString('en-PH', { hour:'numeric', minute:'2-digit', hour12:true }) : ''} />
+                                        </div>
+                                    </div>
+
+                                    {/* 4. Disposition */}
+                                    <div className="space-y-3 p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">4. Patient Disposition</p>
+                                        <div className="flex flex-wrap gap-3">
+                                            {['Improved','Recovered','Home/Discharged Against Medical Advise','Absconded','Expired','Transferred/Referred'].map(opt => (
+                                                <span key={opt} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase border ${data.disposition === opt ? 'bg-philhealth-green text-white border-philhealth-green' : 'bg-white text-slate-300 border-slate-200'}`}>
+                        {opt}
+                    </span>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* 5. Accommodation */}
+                                    <div className="space-y-3 p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">5. Type of Accommodation</p>
+                                        <div className="flex gap-4">
+                                            {['Private','Non-Private (Charity/Service)'].map(opt => (
+                                                <span key={opt} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase border ${data.accomodation_type === opt ? 'bg-philhealth-green text-white border-philhealth-green' : 'bg-white text-slate-300 border-slate-200'}`}>
+                        {opt}
+                    </span>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* 6. Admission Diagnosis */}
+                                    <div className="space-y-2">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">6. Admission Diagnosis/es</p>
+                                        <ReadOnlyDisplay value={data.admission_diagnosis} isTextArea={true} />
+                                    </div>
+
+                                    {/* 7. Discharge Diagnoses */}
+                                    <div className="space-y-3">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">7. Discharge Diagnosis/es</p>
+                                        {(!data.discharge_diagnoses || data.discharge_diagnoses.length === 0) ? (
+                                            <p className="text-xs text-slate-400 italic px-1">No discharge diagnoses on record.</p>
+                                        ) : (
+                                            <div className="overflow-x-auto rounded-xl border border-slate-100">
+                                                <table className="w-full text-[10px]">
+                                                    <thead className="bg-slate-50 border-b border-slate-100">
+                                                    <tr>
+                                                        {['Diagnosis','ICD-10 Code','Related Procedure','RVS Code','Date of Procedure','Laterality'].map(h => (
+                                                            <th key={h} className="px-4 py-3 text-left font-black text-slate-400 uppercase tracking-wider">{h}</th>
+                                                        ))}
+                                                    </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                    {data.discharge_diagnoses.map((d, i) => (
+                                                        <tr key={d.diagnosis_id} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+                                                            <td className="px-4 py-3 font-bold text-slate-700">{d.diagnosis || '—'}</td>
+                                                            <td className="px-4 py-3 text-slate-500">{d.icd_code || '—'}</td>
+                                                            <td className="px-4 py-3 text-slate-500">{d.related_procedure || '—'}</td>
+                                                            <td className="px-4 py-3 text-slate-500">{d.rvs_code || '—'}</td>
+                                                            <td className="px-4 py-3 text-slate-500">{d.procedure_date || '—'}</td>
+                                                            <td className="px-4 py-3 text-slate-500">{d.laterality || '—'}</td>
+                                                        </tr>
+                                                    ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             )}
