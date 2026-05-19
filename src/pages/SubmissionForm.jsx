@@ -17,6 +17,11 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
     const [hciLoading, setHciLoading] = React.useState(true);
     const [toast, setToast] = React.useState(null);
 
+    const [patientQuery, setPatientQuery] = React.useState('');
+    const [patientResults, setPatientResults] = React.useState([]);
+    const [patientSearching, setPatientSearching] = React.useState(false);
+    const [patientSelected, setPatientSelected] = React.useState(false);
+
     // Fetching for Part I
     React.useEffect(() => {
         const fetchHCI = async () => {
@@ -39,7 +44,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
 
 
     const [formData, setFormData] = React.useState({
-        // REAL Part I - HCI
+        // Part I - HCI
         hci_id: '',
         pan_number: '',
         // may hci_name na sa part IV
@@ -47,19 +52,26 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
         hci_address_city: '',
         hci_address_province: '',
 
-        // Unofficial Part I & II
-        patient_name: '',
-        philhealth_id: '',
-        age: '',
-        sex: '',
-        diagnosis: '',
-        icd10_code: '',
-        admission_date: '',
-        procedure: '',
-        medications: '',
-        duration: '',
-        accreditation_number: '',
-        remarks: '',
+        // Part II - Patient Confinement - Section A
+        confinement_id: '',
+        patient_last_name: '',
+        patient_first_name: '',
+        patient_middle_name: '',
+        patient_name_extension: '',
+        is_referred: null,
+        name_referral: '',
+        building_street_referral: '',
+        city_referral: '',
+        province_referral: '',
+        zip_referral: '',
+        date_time_admitted: '',
+        date_time_discharged: '',
+        disposition: '',
+        accomodation_type: '',
+        admission_diagnosis: '',    // free text
+
+        // Discharge Diagnosis rows (from discharge_diagnosis table, linked by confinement_id)
+        discharge_diagnoses: [],    // array of objects from DB
 
         // ---------------- !!!!! DON'T CHANGE THE PART BELOW !!!!! ---------------- //
         // Part III - Section A
@@ -168,7 +180,65 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
             hci_name:            selected.hci_name,
             hci_address_street:  selected.hci_address_street,
             hci_address_city:    selected.hci_address_city,
-            hci_address_province: selected.hci_address_provi,
+            hci_address_province: selected.hci_address_province,
+        }));
+    };
+
+    // Part II - fetching from database happens here
+    const handlePatientSearch = async (query) => {
+        setPatientQuery(query);
+        setPatientSelected(false);
+
+        if (query.length < 2) {
+            setPatientResults([]);
+            return;
+        }
+
+        setPatientSearching(true);
+        const { data, error } = await supabase
+            .from('confinement_info')
+            .select('*')
+            .ilike('last_name', `${query}%`)   // starts-with search, case-insensitive
+            .order('last_name', { ascending: true })
+            .limit(10);
+
+        if (error) {
+            setToast({ message: 'Could not search patients.', type: 'error' });
+        } else {
+            setPatientResults(data || []);
+        }
+        setPatientSearching(false);
+    };
+
+    const handlePatientSelect = async (record) => {
+        setPatientQuery(`${record.last_name}, ${record.first_name} ${record.middle_name || ''}`.trim());
+        setPatientResults([]);
+        setPatientSelected(true);
+
+        // Also fetch their discharge diagnoses
+        const { data: diagData, error: diagError } = await supabase
+            .from('discharge_diagnosis')
+            .select('*')
+            .eq('confinement_id', record.confinement_id);
+
+        setFormData(prev => ({
+            ...prev,
+            confinement_id:          record.confinement_id,
+            patient_last_name:       record.last_name || '',
+            patient_first_name:      record.first_name || '',
+            patient_middle_name:     record.middle_name || '',
+            patient_name_extension:  record.name_extension || '',
+            is_referred:             record.is_referred,
+            name_referral:           record.name_referral || '',
+            building_street_referral: record.building_street_re || '', // truncated col name
+            city_referral:           record.city_referral || '',
+            province_referral:       record.province_referral || '',
+            zip_referral:            record.zip_referral || '',
+            date_time_admitted:      record.date_time_admitted || '', // truncated col name
+            date_time_discharged:    record.date_time_discharged || '', // truncated col name
+            disposition:             record.disposition || '',
+            accomodation_type:       record.accomodation_type || '', // truncated col name
+            discharge_diagnoses:     diagError ? [] : (diagData || []),
         }));
     };
 
@@ -186,9 +256,23 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
 
     const isStepValid = () => {
         if (currentStep === 1) return !!formData.hci_id;
-        if (currentStep === 2) return formData.diagnosis && formData.icd10_code;
+        if (currentStep === 2) return !!formData.confinement_id;
         if (currentStep === 4) return formData.finalCertification && formData.hci_name;
         return true;
+    };
+
+    const formatDate = (ts) => {
+        if (!ts) return '';
+        return new Date(ts).toLocaleDateString('en-PH', {
+            year: 'numeric', month: 'long', day: 'numeric'
+        });
+    };
+
+    const formatTime = (ts) => {
+        if (!ts) return '';
+        return new Date(ts).toLocaleTimeString('en-PH', {
+            hour: 'numeric', minute: '2-digit', hour12: true
+        });
     };
 
     return (
@@ -349,31 +433,160 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
 
                             {/* ---------------- PART II HERE ---------------- */}
                             {currentStep === 2 && (
-                                <div className="space-y-8">
-                                    <FormInput
-                                        label="Diagnosis"
-                                        name="diagnosis"
-                                        value={formData.diagnosis}
-                                        onChange={handleChange}
-                                        type="textarea"
-                                    />
+                                <div className="space-y-10">
 
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                        <FormInput
-                                            label="ICD-10 Code"
-                                            name="icd10_code"
-                                            value={formData.icd10_code}
-                                            onChange={handleChange}
+                                    {/* 1. PATIENT NAME SEARCH */}
+                                    <div className="space-y-2 relative">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">
+                                            1. Name of Patient
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={patientQuery}
+                                            onChange={(e) => handlePatientSearch(e.target.value)}
+                                            placeholder="Type last name to search..."
+                                            className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-philhealth-green/20 outline-none transition-all"
                                         />
 
-                                        <FormInput
-                                            label="Admission Date"
-                                            name="admission_date"
-                                            type="date"
-                                            value={formData.admission_date}
-                                            onChange={handleChange}
-                                        />
+                                        {/* Search results dropdown */}
+                                        {patientResults.length > 0 && (
+                                            <motion.div
+                                                initial={{ opacity: 0, y: -4 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                className="absolute z-20 w-full bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden mt-1"
+                                            >
+                                                {patientSearching && (
+                                                    <div className="px-5 py-3 text-xs text-slate-400 italic">Searching...</div>
+                                                )}
+                                                {patientResults.map((p) => (
+                                                    <button
+                                                        key={p.confinement_id}
+                                                        type="button"
+                                                        onClick={() => handlePatientSelect(p)}
+                                                        className="w-full text-left px-5 py-3 text-xs font-bold hover:bg-emerald-50 hover:text-philhealth-green transition-colors border-b border-slate-100 last:border-0"
+                                                    >
+                                                        {p.last_name}, {p.first_name} {p.middle_name || ''} {p.name_extension || ''}
+                                                    </button>
+                                                ))}
+                                            </motion.div>
+                                        )}
                                     </div>
+
+                                    {/* Auto-filled patient info — shown after selection */}
+                                    {patientSelected && (
+                                        <motion.div
+                                            initial={{ opacity: 0, y: -8 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            className="space-y-8"
+                                        >
+                                            {/* Name row */}
+                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-6 bg-emerald-50/50 rounded-2xl border border-emerald-100">
+                                                <FormInput label="Last Name"       name="patient_last_name"      value={formData.patient_last_name}      onChange={() => {}} disabled />
+                                                <FormInput label="First Name"      name="patient_first_name"     value={formData.patient_first_name}     onChange={() => {}} disabled />
+                                                <FormInput label="Name Extension"  name="patient_name_extension" value={formData.patient_name_extension} onChange={() => {}} disabled />
+                                                <FormInput label="Middle Name"     name="patient_middle_name"    value={formData.patient_middle_name}    onChange={() => {}} disabled />
+                                            </div>
+
+                                            {/* 2. Was patient referred? */}
+                                            <div className="space-y-4 p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">
+                                                    2. Was patient referred by another Health Care Institution (HCI)?
+                                                </p>
+                                                <div className="flex gap-6">
+                                                    <span className={`px-4 py-2 rounded-lg text-xs font-black uppercase border ${formData.is_referred === false ? 'bg-philhealth-green text-white border-philhealth-green' : 'bg-white text-slate-400 border-slate-200'}`}>No</span>
+                                                    <span className={`px-4 py-2 rounded-lg text-xs font-black uppercase border ${formData.is_referred === true  ? 'bg-philhealth-green text-white border-philhealth-green' : 'bg-white text-slate-400 border-slate-200'}`}>Yes</span>
+                                                </div>
+                                                {formData.is_referred && (
+                                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 pt-2">
+                                                        <FormInput label="Name of Referring HCI"    name="name_referral"           value={formData.name_referral}           onChange={() => {}} disabled />
+                                                        <FormInput label="Building / Street"         name="building_street_referral" value={formData.building_street_referral} onChange={() => {}} disabled />
+                                                        <FormInput label="City / Municipality"       name="city_referral"           value={formData.city_referral}           onChange={() => {}} disabled />
+                                                        <FormInput label="Province"                  name="province_referral"       value={formData.province_referral}       onChange={() => {}} disabled />
+                                                        <FormInput label="Zip Code"                  name="zip_referral"            value={formData.zip_referral}            onChange={() => {}} disabled />
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* 3. Confinement Period */}
+                                            <div className="space-y-3 p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">3. Confinement Period</p>
+                                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                                    <FormInput label="Date Admitted"     name="date_admitted"  value={formatDate(formData.date_time_admitted)}   onChange={() => {}} disabled />
+                                                    <FormInput label="Time Admitted"     name="time_admitted"  value={formatTime(formData.date_time_admitted)}   onChange={() => {}} disabled />
+                                                    <FormInput label="Date Discharged"   name="date_discharged" value={formatDate(formData.date_time_discharged)} onChange={() => {}} disabled />
+                                                    <FormInput label="Time Discharged"   name="time_discharged" value={formatTime(formData.date_time_discharged)} onChange={() => {}} disabled />
+                                                </div>
+                                            </div>
+
+                                            {/* 4. Patient Disposition */}
+                                            <div className="space-y-3 p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">4. Patient Disposition</p>
+                                                <div className="flex flex-wrap gap-3">
+                                                    {['Improved','Recovered','Home/Discharged Against Medical Advise','Absconded','Expired','Transferred/Referred'].map(opt => (
+                                                        <span key={opt} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase border ${formData.disposition === opt ? 'bg-philhealth-green text-white border-philhealth-green' : 'bg-white text-slate-300 border-slate-200'}`}>
+                                {opt}
+                            </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            {/* 5. Type of Accommodation */}
+                                            <div className="space-y-3 p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">5. Type of Accommodation</p>
+                                                <div className="flex gap-4">
+                                                    {['Private','Non-Private (Charity/Service)'].map(opt => (
+                                                        <span key={opt} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase border ${formData.accomodation_type === opt ? 'bg-philhealth-green text-white border-philhealth-green' : 'bg-white text-slate-300 border-slate-200'}`}>
+                                {opt}
+                            </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            {/* 6. Admission Diagnosis — free text, doctor fills this */}
+                                            <div className="space-y-2">
+                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">6. Admission Diagnosis/es</p>
+                                                <textarea
+                                                    name="admission_diagnosis"
+                                                    value={formData.admission_diagnosis || ''}
+                                                    onChange={handleChange}
+                                                    placeholder="Enter admission diagnosis..."
+                                                    className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-philhealth-green/20 outline-none transition-all min-h-[80px]"
+                                                />
+                                            </div>
+
+                                            {/* 7. Discharge Diagnosis — from discharge_diagnosis table */}
+                                            <div className="space-y-4">
+                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">7. Discharge Diagnosis/es</p>
+                                                {formData.discharge_diagnoses.length === 0 ? (
+                                                    <p className="text-xs text-slate-400 italic px-1">No discharge diagnoses found for this patient.</p>
+                                                ) : (
+                                                    <div className="overflow-x-auto rounded-xl border border-slate-100">
+                                                        <table className="w-full text-[10px]">
+                                                            <thead className="bg-slate-50 border-b border-slate-100">
+                                                            <tr>
+                                                                {['Diagnosis','ICD-10 Code','Related Procedure','RVS Code','Date of Procedure','Laterality'].map(h => (
+                                                                    <th key={h} className="px-4 py-3 text-left font-black text-slate-400 uppercase tracking-wider">{h}</th>
+                                                                ))}
+                                                            </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                            {formData.discharge_diagnoses.map((d, i) => (
+                                                                <tr key={d.diagnosis_id} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+                                                                    <td className="px-4 py-3 font-bold text-slate-700">{d.diagnosis || '—'}</td>
+                                                                    <td className="px-4 py-3 text-slate-500">{d.icd_code || '—'}</td>
+                                                                    <td className="px-4 py-3 text-slate-500">{d.related_procedure || '—'}</td>
+                                                                    <td className="px-4 py-3 text-slate-500">{d.rvs_code || '—'}</td>
+                                                                    <td className="px-4 py-3 text-slate-500">{d.procedure_date || '—'}</td>
+                                                                    <td className="px-4 py-3 text-slate-500">{d.laterality || '—'}</td>
+                                                                </tr>
+                                                            ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </motion.div>
+                                    )}
                                 </div>
                             )}
 
