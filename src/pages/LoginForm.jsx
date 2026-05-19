@@ -69,11 +69,11 @@ export default function LoginForm({ onLogin, isLoading: externalLoading }) {
                             animate={{ scale: 1 }}
                             className="inline-flex flex-col items-center gap-4 relative z-10"
                         >
-                            <div className="w-20 h-20 bg-philhealth-yellow rounded-2xl flex items-center justify-center shadow-xl shadow-black/20 transform -rotate-3 hover:rotate-0 transition-transform cursor-default">
-                                <span className="text-philhealth-green text-3xl font-black">
-                                  CF-2
-                                </span>
-                            </div>
+                            <img
+                                src="/philhealth-logo.png"
+                                alt="PhilHealth Logo"
+                                className="w-20 h-20 object-contain"
+                            />
 
                             <div className="mt-2">
                                 <h1 className="text-3xl font-black text-white tracking-tight">

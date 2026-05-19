@@ -69,6 +69,13 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
         disposition: '',
         accomodation_type: '',
         admission_diagnosis: '',    // free text
+        date_time_expiration: '',
+        transferred_hci_name: '',
+        transferred_street: '',
+        transferred_city: '',
+        transferred_province: '',
+        transferred_zip: '',
+        reason_referral: '',
 
         // Discharge Diagnosis rows (from discharge_diagnosis table, linked by confinement_id)
         discharge_diagnoses: [],
@@ -283,7 +290,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
         let repData = [];
         let biteData = [];
         let mcpData = [];
-        let newbornRows = null;
+        let newbornRows = [];
         let repError = null;
 
         // 3. Fetch from all child sub-tables via consideration_id
@@ -379,6 +386,13 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
             disposition:              record.disposition || '',
             accomodation_type:        record.accomodation_type || '', 
             discharge_diagnoses:      diagError ? [] : (diagData || []),
+            date_time_expiration:     record.date_time_expiration  || '',
+            transferred_hci_name:     record.transferred_hci_name  || '',
+            transferred_street:       record.transferred_street    || '',
+            transferred_city:         record.transferred_city      || '',
+            transferred_province:     record.transferred_province  || '',
+            transferred_zip:          record.transferred_zip       || '',
+            reason_referral:          record.reason_referral       || '',
 
             // Part a
             special_considerations: {
@@ -477,7 +491,19 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
 
     const isStepValid = () => {
         if (currentStep === 1) return !!formData.hci_id;
-        if (currentStep === 2) return !!formData.confinement_id;
+        if (currentStep === 2) {
+            if (!formData.confinement_id) return false;
+            // Every discharge diagnosis row must have all fields filled
+            const allRowsComplete = formData.discharge_diagnoses.every(d =>
+                d.diagnosis?.trim() &&
+                d.icd_code?.trim() &&
+                d.related_procedure?.trim() &&
+                d.rvs_code?.trim() &&
+                d.procedure_date?.trim() &&
+                d.laterality?.trim()
+            );
+            return allRowsComplete;
+        }
         if (currentStep === 4) return formData.finalCertification && formData.hci_name;
         return true;
     };
@@ -745,10 +771,47 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                 <div className="flex flex-wrap gap-3">
                                                     {['Improved','Recovered','Home/Discharged Against Medical Advise','Absconded','Expired','Transferred/Referred'].map(opt => (
                                                         <span key={opt} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase border ${formData.disposition === opt ? 'bg-philhealth-green text-white border-philhealth-green' : 'bg-white text-slate-300 border-slate-200'}`}>
-                                {opt}
-                            </span>
+                                                            {opt}
+                                                        </span>
                                                     ))}
                                                 </div>
+
+                                                {/* Expired — show date and time of expiration */}
+                                                {formData.disposition === 'Expired' && (
+                                                    <div className="grid grid-cols-2 gap-4 pt-3 border-t border-slate-200 mt-2">
+                                                        <FormInput
+                                                            label="Date of Expiration"
+                                                            value={formData.date_time_expiration
+                                                                ? new Date(formData.date_time_expiration).toLocaleDateString('en-PH', { month:'2-digit', day:'2-digit', year:'2-digit' })
+                                                                : ''}
+                                                            onChange={() => {}}
+                                                            disabled
+                                                        />
+                                                        <FormInput
+                                                            label="Time of Expiration"
+                                                            value={formData.date_time_expiration
+                                                                ? new Date(formData.date_time_expiration).toLocaleTimeString('en-PH', { hour:'numeric', minute:'2-digit', hour12: true })
+                                                                : ''}
+                                                            onChange={() => {}}
+                                                            disabled
+                                                        />
+                                                    </div>
+                                                )}
+
+                                                {/* Transferred/Referred — show destination HCI details */}
+                                                {formData.disposition === 'Transferred/Referred' && (
+                                                    <div className="space-y-4 pt-3 border-t border-slate-200 mt-2">
+                                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Transferred / Referred To:</p>
+                                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                                            <FormInput label="HCI Name"          value={formData.transferred_hci_name}   onChange={() => {}} disabled />
+                                                            <FormInput label="Building / Street" value={formData.transferred_street}     onChange={() => {}} disabled />
+                                                            <FormInput label="City / Municipality" value={formData.transferred_city}     onChange={() => {}} disabled />
+                                                            <FormInput label="Province"          value={formData.transferred_province}   onChange={() => {}} disabled />
+                                                            <FormInput label="Zip Code"          value={formData.transferred_zip}        onChange={() => {}} disabled />
+                                                        </div>
+                                                        <FormInput label="Reason for Referral / Transfer" value={formData.reason_referral} onChange={() => {}} disabled />
+                                                    </div>
+                                                )}
                                             </div>
 
                                             {/* 5. Type of Accommodation */}
@@ -757,15 +820,15 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                 <div className="flex gap-4">
                                                     {['Private','Non-Private (Charity/Service)'].map(opt => (
                                                         <span key={opt} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase border ${formData.accomodation_type === opt ? 'bg-philhealth-green text-white border-philhealth-green' : 'bg-white text-slate-300 border-slate-200'}`}>
-                                {opt}
-                            </span>
+                                                            {opt}
+                                                        </span>
                                                     ))}
                                                 </div>
                                             </div>
 
                                             {/* 6. Admission Diagnosis — free text, doctor fills this */}
                                             <div className="space-y-2">
-                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">6. Admission Diagnosis/es</p>
+                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">6. Admission Diagnosis/es <span className="text-red-500">*</span></p>
                                                 <textarea
                                                     name="admission_diagnosis"
                                                     value={formData.admission_diagnosis || ''}
@@ -775,36 +838,90 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                 />
                                             </div>
 
-                                            {/* 7. Discharge Diagnosis — from discharge_diagnosis table */}
+                                            {/* 7. Discharge Diagnosis/es */}
                                             <div className="space-y-4">
-                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">7. Discharge Diagnosis/es</p>
+                                                <div className="flex items-center justify-between">
+                                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">
+                                                        7. Discharge Diagnosis/es <span className="text-red-500">*</span>
+                                                    </p>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            setFormData(prev => ({
+                                                                ...prev,
+                                                                discharge_diagnoses: [
+                                                                    ...prev.discharge_diagnoses,
+                                                                    { diagnosis_id: Date.now(), diagnosis: '', icd_code: '', related_procedure: '', rvs_code: '', procedure_date: '', laterality: '' }
+                                                                ]
+                                                            }))
+                                                        }
+                                                        className="text-[10px] px-3 py-1.5 bg-philhealth-green text-white rounded-md font-bold uppercase transition hover:opacity-90"
+                                                    >
+                                                        + Add Row
+                                                    </button>
+                                                </div>
+
                                                 {formData.discharge_diagnoses.length === 0 ? (
-                                                    <p className="text-xs text-slate-400 italic px-1">No discharge diagnoses found for this patient.</p>
+                                                    <p className="text-xs text-slate-400 italic px-1">
+                                                        No discharge diagnoses yet. Click "+ Add Row" to add one.
+                                                    </p>
                                                 ) : (
                                                     <div className="overflow-x-auto rounded-xl border border-slate-100">
                                                         <table className="w-full text-[10px]">
                                                             <thead className="bg-slate-50 border-b border-slate-100">
                                                             <tr>
-                                                                {['Diagnosis','ICD-10 Code','Related Procedure','RVS Code','Date of Procedure','Laterality'].map(h => (
-                                                                    <th key={h} className="px-4 py-3 text-left font-black text-slate-400 uppercase tracking-wider">{h}</th>
+                                                                {['Diagnosis', 'ICD-10 Code', 'Related Procedure', 'RVS Code', 'Date of Procedure', 'Laterality', ''].map(h => (
+                                                                    <th key={h} className="px-3 py-3 text-left font-black text-slate-400 uppercase tracking-wider">{h}</th>
                                                                 ))}
                                                             </tr>
                                                             </thead>
                                                             <tbody>
                                                             {formData.discharge_diagnoses.map((d, i) => (
-                                                                <tr key={d.diagnosis_id} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
-                                                                    <td className="px-4 py-3 font-bold text-slate-700">{d.diagnosis || '—'}</td>
-                                                                    <td className="px-4 py-3 text-slate-500">{d.icd_code || '—'}</td>
-                                                                    <td className="px-4 py-3 text-slate-500">{d.related_procedure || '—'}</td>
-                                                                    <td className="px-4 py-3 text-slate-500">{d.rvs_code || '—'}</td>
-                                                                    <td className="px-4 py-3 text-slate-500">{d.procedure_date || '—'}</td>
-                                                                    <td className="px-4 py-3 text-slate-500">{d.laterality || '—'}</td>
+                                                                <tr key={d.diagnosis_id ?? i} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+                                                                    {['diagnosis', 'icd_code', 'related_procedure', 'rvs_code', 'procedure_date', 'laterality'].map((field) => (
+                                                                        <td key={field} className="px-2 py-2">
+                                                                            <input
+                                                                                type={field === 'procedure_date' ? 'date' : 'text'}
+                                                                                value={d[field] || ''}
+                                                                                onChange={(e) => {
+                                                                                    const updated = [...formData.discharge_diagnoses];
+                                                                                    updated[i] = { ...updated[i], [field]: e.target.value };
+                                                                                    setFormData(prev => ({ ...prev, discharge_diagnoses: updated }));
+                                                                                }}
+                                                                                className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-700 focus:ring-1 focus:ring-philhealth-green/30 outline-none transition-all min-w-[80px]"
+                                                                            />
+                                                                        </td>
+                                                                    ))}
+                                                                    <td className="px-2 py-2">
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() =>
+                                                                                setFormData(prev => ({
+                                                                                    ...prev,
+                                                                                    discharge_diagnoses: prev.discharge_diagnoses.filter((_, idx) => idx !== i)
+                                                                                }))
+                                                                            }
+                                                                            className="text-red-400 hover:text-red-600 text-[9px] font-black uppercase"
+                                                                        >
+                                                                            Remove
+                                                                        </button>
+                                                                    </td>
                                                                 </tr>
                                                             ))}
                                                             </tbody>
                                                         </table>
                                                     </div>
                                                 )}
+                                                {/* Incomplete row warning */}
+                                                {formData.discharge_diagnoses.length > 0 &&
+                                                    formData.discharge_diagnoses.some(d =>
+                                                        !d.diagnosis?.trim() || !d.icd_code?.trim() || !d.related_procedure?.trim() ||
+                                                        !d.rvs_code?.trim() || !d.procedure_date?.trim() || !d.laterality?.trim()
+                                                    ) && (
+                                                        <p className="text-[10px] text-red-500 font-bold flex items-center gap-1.5 px-1 pt-1">
+                                                            ⚠ All fields in each diagnosis row must be filled before continuing.
+                                                        </p>
+                                                    )}
                                             </div>
 
                                             {/* --- NEW ADDITION: 8. Special Considerations --- */}
@@ -1042,7 +1159,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                 <div className="flex justify-between items-center border-b border-slate-200 pb-4">
                                                     <div>
                                                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">
-                                                            10. Accreditation 
+                                                            10. Accreditation <span className="text-red-500">*</span>
                                                         </p>
                                                     </div>
                                                     <button 
@@ -1120,7 +1237,6 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                         name="certifiedEnough"
                                                         checked={formData.certifiedEnough}
                                                         onChange={handleChange}
-                                                        disabled={formData.consumedPrior}
                                                         className="w-6 h-6 rounded border-slate-300 text-philhealth-green focus:ring-philhealth-green cursor-pointer transition-all disabled:opacity-30"
                                                     />
                                                 </div>
@@ -1180,7 +1296,6 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                         name="consumedPrior"
                                                         checked={formData.consumedPrior}
                                                         onChange={handleChange}
-                                                        disabled={formData.certifiedEnough}
                                                         className="w-6 h-6 rounded border-slate-300 text-philhealth-green focus:ring-philhealth-green cursor-pointer transition-all disabled:opacity-30"
                                                     />
                                                 </div>
