@@ -272,13 +272,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
         setPatientSelected(true);
 
         try {
-            // 1. Fetch discharge diagnoses
-            const { data: diagData, error: diagError } = await supabase
-                .from('discharge_diagnosis')
-                .select('*')
-                .eq('confinement_id', record.confinement_id);
-
-            // 2. Fetch philhealth benefits
+            // 1. Fetch philhealth benefits
             const { data: philhealthData, error: phError } = await supabase
                 .from('philhealth_benefits')
                 .select('*')
@@ -340,7 +334,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                 date_time_discharged:     record.date_time_discharged || '',
                 disposition:              record.disposition || '',
                 accomodation_type:        record.accomodation_type || '',
-                discharge_diagnoses:      diagError ? [] : (diagData || []),
+                discharge_diagnoses:      [],
                 date_time_expiration:     record.date_time_expiration  || '',
                 transferred_hci_name:     record.transferred_hci_name  || '',
                 transferred_street:       record.transferred_street    || '',

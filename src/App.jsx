@@ -277,19 +277,6 @@ export default function App() {
         if (nbError) throw nbError;
       }
 
-      // ---- ACCREDITATION / PROFESSIONALS ----
-      if ((data.professionals || []).length > 0) {
-        const accRows = data.professionals.map(p => ({
-          confinement_id:       data.confinement_id || null,
-          accreditation_number: parseInt_(p.accreditation_number),
-          date:                 parseDate(p.date),
-          is_copay:             p.is_copay || false,
-          copay_amount:         parseNum(p.copay_amount),
-        }));
-        const { error: accError } = await supabase.from('accreditation').insert(accRows);
-        if (accError) throw accError;
-      }
-
       // ---- CLAIMFORMS2 master record ----
         // ---- Update admission_diagnosis on the existing confinement_info row ----
         if (data.confinement_id && data.admission_diagnosis) {
@@ -317,6 +304,19 @@ export default function App() {
 
       if (cf2Error) throw cf2Error;
 
+      // ---- ACCREDITATION / PROFESSIONALS (needs cf2_id from above) ----
+      if ((data.professionals || []).length > 0) {
+        const accRows = data.professionals.map(p => ({
+          cf2_id:               cf2Data.cf2_id,
+          accreditation_number: parseInt_(p.accreditation_number),
+          date:                 parseDate(p.date),
+          is_copay:             p.is_copay || false,
+          copay_amount:         parseNum(p.copay_amount),
+        }));
+        const { error: accError } = await supabase.from('accreditation').insert(accRows);
+        if (accError) throw accError;
+      }
+
       // Update local state so dashboard reflects the new row immediately
       setForms(prev => [{
         id:              cf2Data.cf2_id,
@@ -328,9 +328,9 @@ export default function App() {
         // ---- Discharge Diagnoses insert ----
         if (data.discharge_diagnoses && data.discharge_diagnoses.length > 0) {
             const diagRows = data.discharge_diagnoses
-                .filter(d => d.diagnosis?.trim()) // skip empty rows
+                .filter(d => d.diagnosis?.trim())
                 .map(d => ({
-                    confinement_id:    data.confinement_id,
+                    cf2_id:            cf2Data.cf2_id,
                     diagnosis:         d.diagnosis        || null,
                     icd_code:          d.icd_code         || null,
                     related_procedure: d.related_procedure || null,
@@ -372,10 +372,7 @@ export default function App() {
           confinement_id,
           status,
           hci_info (*),
-          confinement_info (
-            *,
-            discharge_diagnosis (*)
-          ),
+          confinement_info (*),
           Part3_Consumption_Consent (*),
           Part4_Certification (*)
         `)
@@ -430,11 +427,20 @@ export default function App() {
             .maybeSingle();
 
         // ---- Fetch accreditation / professionals ----
-        const { data: accData } = await supabase
+        const { data: accDataRaw } = await supabase
             .from('accreditation')
             .select('*')
-            .eq('confinement_id', data.confinement_id)
+            .eq('cf2_id', claimId)
             .order('accreditation_id', { ascending: true });
+
+        const accData = accDataRaw || [];
+
+        // ---- Fetch discharge diagnoses ----
+        const { data: diagData } = await supabase
+            .from('discharge_diagnosis')
+            .select('*')
+            .eq('cf2_id', claimId)
+            .order('diagnosis_id', { ascending: true });
 
         // Group repetitive procedures by name → array of dates
         const repByProcedure = {};
@@ -478,7 +484,7 @@ export default function App() {
           disposition:              patient.disposition || '',
           accomodation_type:        patient.accomodation_type || '',
           admission_diagnosis:      patient.admission_diagnosis || '',
-            discharge_diagnoses:     patient.discharge_diagnosis || [],
+          discharge_diagnoses:      diagData || [],
             date_time_expiration:  patient.date_time_expiration  || '',
             transferred_hci_name:  patient.transferred_hci_name  || '',
             transferred_street:    patient.transferred_street    || '',
