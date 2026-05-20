@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { User, Stethoscope, ClipboardList, CheckSquare, ArrowLeft, Save, ArrowRight } from 'lucide-react';
 import { supabase } from "../lib/supabase.js";
 import Toast from '../pages/Toast.jsx';
+import ReactDOM from 'react-dom';
 
 const STEPS = [
     { id: 1, title: 'Health Care Institution (HCI) Information', icon: <Stethoscope size={20} /> },
@@ -21,6 +22,8 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
     const [patientResults, setPatientResults] = React.useState([]);
     const [patientSearching, setPatientSearching] = React.useState(false);
     const [patientSelected, setPatientSelected] = React.useState(false);
+
+    const [showConfirmModal, setShowConfirmModal] = React.useState(false);
 
     // Fetching for Part I
     React.useEffect(() => {
@@ -409,11 +412,41 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
     };
     // STEPPER AREA
     const nextStep = () => {
+        if (currentStep === 2 && !formData.confinement_id) {
+            setToast({ message: 'Patient Name is required. You may continue, but please remember to fill them before submitting.', type: 'warning' });
+            setCurrentStep((prev) => Math.min(prev + 1, 4));
+            return;
+        }
+        if (currentStep === 2 && !formData.admission_diagnosis?.trim()) {
+            setToast({ message: 'Section 6 (Admission Diagnosis) is required. You may continue, but please remember to fill them before submitting.', type: 'warning' });
+            setCurrentStep((prev) => Math.min(prev + 1, 4));
+            return;
+        }
+        if (currentStep === 2 && formData.discharge_diagnoses.some(d =>
+            !d.diagnosis?.trim() || !d.icd_code?.trim() || !d.related_procedure?.trim() ||
+            !d.rvs_code?.trim() || !d.procedure_date?.trim() || !d.laterality?.trim()
+        )) {
+            setToast({ message: 'Some fields in Section 7 (Discharge Diagnoses) are incomplete. All row fields must have a value.', type: 'warning' });
+            setCurrentStep((prev) => Math.min(prev + 1, 4));
+            return;
+        }
+        if (currentStep === 2 && formData.professionals.length === 0) {
+            setToast({ message: 'Section 10 (Accreditation) has no professionals added. You may continue, but please remember to fill them before submitting.', type: 'warning' });
+            setCurrentStep((prev) => Math.min(prev + 1, 4));
+            return;
+        }
+        if (currentStep === 3 && !formData.certifiedEnough && !formData.consumedPrior) {
+            setToast({ message: 'Please select at least one option in Section A. You may continue, but please remember to fill them before submitting.', type: 'warning' });
+            setCurrentStep((prev) => Math.min(prev + 1, 4));
+            return;
+        }
+        if (currentStep === 3 && (!formData.representativeName?.trim() || !formData.representativeDateSigned || !formData.consentMedicalRecords || !formData.consentLiabilityFree)) {
+            setToast({ message: 'Section B (Consent) has incomplete required fields. You may continue, but please remember to fill them before submitting.', type: 'warning' });
+            setCurrentStep((prev) => Math.min(prev + 1, 4));
+            return;
+        }
         if (!isStepValid()) {
-            setToast({
-                message: 'Some fields in this section are incomplete. You can continue, but remember to fill them before submitting.',
-                type: 'warning',
-            });
+            setToast({ message: 'Some fields in this section are incomplete. You may continue, but please remember to fill them before submitting.', type: 'warning' });
         }
         setCurrentStep((prev) => Math.min(prev + 1, 4));
     };
@@ -423,18 +456,23 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
         if (currentStep === 1) return !!formData.hci_id;
         if (currentStep === 2) {
             if (!formData.confinement_id) return false;
-            // Every discharge diagnosis row must have all fields filled
+            if (!formData.admission_diagnosis?.trim()) return false;
+            if (formData.professionals.length === 0) return false;
             const allRowsComplete = formData.discharge_diagnoses.every(d =>
-                d.diagnosis?.trim() &&
-                d.icd_code?.trim() &&
-                d.related_procedure?.trim() &&
-                d.rvs_code?.trim() &&
-                d.procedure_date?.trim() &&
-                d.laterality?.trim()
+                d.diagnosis?.trim() && d.icd_code?.trim() && d.related_procedure?.trim() &&
+                d.rvs_code?.trim() && d.procedure_date?.trim() && d.laterality?.trim()
             );
-            return allRowsComplete;
+            if (!allRowsComplete) return false;
+            return true;
         }
-        if (currentStep === 4) return formData.finalCertification && formData.hci_representative_name;
+        if (currentStep === 3) {
+            if (!formData.certifiedEnough && !formData.consumedPrior) return false;
+            if (!formData.representativeName?.trim()) return false;
+            if (!formData.representativeDateSigned) return false;
+            if (!formData.consentMedicalRecords || !formData.consentLiabilityFree) return false;
+            return true;
+        }
+        if (currentStep === 4) return formData.finalCertification && !!formData.hci_representative_name;
         return true;
     };
 
@@ -455,12 +493,11 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
     return (
         <div className="max-w-5xl mx-auto pb-12">
             {/* Toast banner */}
-            {toast && (
-                <Toast
-                    message={toast.message}
-                    type={toast.type}
-                    onClose={() => setToast(null)}
-                />
+            {toast && ReactDOM.createPortal(
+                <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[9999] w-full max-w-2xl px-4">
+                    <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
+                </div>,
+                document.body
             )}
             <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
                 {/* Header */}
@@ -1297,6 +1334,9 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                         <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest border-l-4 border-philhealth-green pl-4">
                                             A. CERTIFICATION OF CONSUMPTION OF BENEFITS:
                                         </h3>
+                                        <p className="text-[10px] text-slate-400 italic pl-5">
+                                            Please choose at least one of the options below. <span className="text-red-400 not-italic font-bold">*</span>
+                                        </p>
 
                                         {/* Option 1: Enough Coverage */}
                                         <div className="space-y-6 p-6 bg-emerald-50/50 rounded-2xl border border-emerald-100">
@@ -1349,6 +1389,11 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                     placeholder="Auto-computed"
                                                 />
                                             </div>
+                                            {formData.certifiedEnough && (
+                                                <p className="text-[10px] text-red-400 font-bold pt-1">
+                                                    ⚠ Please ensure all fee fields are filled in to support your claim approval.
+                                                </p>
+                                            )}
                                         </div>
 
                                         <div className="flex items-center gap-4 py-2">
@@ -1640,6 +1685,9 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                             </div>
                                                         </div>
                                                     </div>
+                                                    <p className="text-[10px] text-red-400 font-bold pt-2">
+                                                        ⚠ Please ensure all co-pay and purchase fields are completely filled in to support your claim approval.
+                                                    </p>
                                                 </motion.div>
                                             )}
                                         </div>
@@ -1653,13 +1701,13 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
 
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                             <FormInput
-                                                label="Name of Member/Patient/Authorized Representative"
+                                                label={<>Name of Member/Patient/Authorized Representative <span className="text-red-500">*</span></>}
                                                 name="representativeName"
                                                 value={formData.representativeName}
                                                 onChange={handleChange}
                                             />
                                             <FormInput
-                                                label="Date"
+                                                label={<>Date <span className="text-red-500">*</span></>}
                                                 name="representativeDateSigned"
                                                 type="date"
                                                 value={formData.representativeDateSigned}
@@ -1671,7 +1719,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                             <div className="space-y-4 p-6 bg-slate-50 rounded-xl">
                                                 <div className="flex justify-between items-center">
                                                     <label className="text-[10px] font-black uppercase text-slate-900 tracking-widest">
-                                                        Relationship of the representative
+                                                        Relationship of the representative <span className="text-red-500">*</span>
                                                     </label>
                                                     {formData.representativeRelationship && (
                                                         <button
@@ -1698,7 +1746,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                             <div className="space-y-4 p-6 bg-slate-50 rounded-xl">
                                                 <div className="flex justify-between items-center">
                                                     <label className="text-[10px] font-black uppercase text-slate-900 tracking-widest">
-                                                        Reason for signing on behalf
+                                                        Reason for signing on behalf <span className="text-red-500">*</span>
                                                     </label>
                                                     {formData.behalfReason && (
                                                         <button
@@ -1734,7 +1782,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                 </div>
                                                 <div className="flex-1">
                                                     <p className="text-[11px] text-slate-800 font-medium leading-relaxed">
-                                                        I hereby consent to the submission and examination of the patient’s pertinent medical records for the purpose of verifying the veracity of this claim to effect efficient processing of benefit payment.
+                                                        I hereby consent to the submission and examination of the patient’s pertinent medical records for the purpose of verifying the veracity of this claim to effect efficient processing of benefit payment. <span className="text-red-500 font-black">*</span>
                                                     </p>
                                                 </div>
                                             </label>
@@ -1753,7 +1801,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                 </div>
                                                 <div className="flex-1">
                                                     <p className="text-[11px] text-slate-800 font-medium leading-relaxed">
-                                                        I hereby hold PhilHealth or any of its officers, employees and/or representatives free from any and all legal liabilities relative to the herein-mentioned consent which I have voluntarily and willingly given in connection with this claim for reimbursement before PhilHealth.
+                                                        I hereby hold PhilHealth or any of its officers, employees and/or representatives free from any and all legal liabilities relative to the herein-mentioned consent which I have voluntarily and willingly given in connection with this claim for reimbursement before PhilHealth. <span className="text-red-500 font-black">*</span>
                                                     </p>
                                                 </div>
                                             </label>
@@ -1770,7 +1818,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                     {/* Row 1: Name of Authorized Representative */}
                                     <div className="grid grid-cols-1">
                                         <FormInput
-                                            label="Name of Authorized HCI Representative"
+                                            label={<>Name of Authorized HCI Representative <span className="text-red-500">*</span></>}
                                             name="hci_representative_name"
                                             value={formData.hci_representative_name}
                                             onChange={handleChange}
@@ -1780,7 +1828,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                     {/* Row 2: Designation and Date side-by-side */}
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                         <FormInput
-                                            label="Official Capacity/Designation"
+                                            label={<>"Official Capacity/Designation" <span className="text-red-500">*</span></>}
                                             name="designation"
                                             value={formData.designation}
                                             onChange={handleChange}
@@ -1788,7 +1836,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
 
                                         <div className="space-y-2">
                                             <label className="text-[10px] font-black uppercase text-slate-900 tracking-widest">
-                                                Date
+                                                Date <span className="text-red-500">*</span>
                                             </label>
                                             <input
                                                 type="date"
@@ -1814,7 +1862,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                             </div>
                                             <div className="flex-1">
                                                 <p className="text-[11px] text-slate-800 leading-relaxed font-medium">
-                                                    I certify that services rendered were recorded in the patient’s chart and health care institution records and that the herein information given are true and correct.
+                                                    I certify that services rendered were recorded in the patient’s chart and health care institution records and that the herein information given are true and correct. <span className="text-red-500 font-black">*</span>
                                                 </p>
                                             </div>
                                         </label>
@@ -1839,8 +1887,8 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                     {currentStep === 4 ? (
                         <button
                             onClick={() => {
-                                if (formData.finalCertification) {
-                                    onSubmit({ ...formData, grandTotalEnough });
+                                if (formData.finalCertification && isStepValid()) {
+                                    setShowConfirmModal(true);
                                 }
                             }}
                             disabled={!formData.finalCertification || !isStepValid()}
@@ -1866,6 +1914,48 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                     )}
                 </div>
             </div>
+            {showConfirmModal && ReactDOM.createPortal(
+                <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        transition={{ duration: 0.2 }}
+                        className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-md w-full mx-4 overflow-hidden"
+                    >
+                        <div className="bg-philhealth-green p-6 text-white">
+                            <h3 className="text-lg font-black tracking-tight">Confirm Submission</h3>
+                            <p className="text-[11px] opacity-70 mt-1">CF-2 Claim Form 2</p>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <p className="text-sm text-slate-700 font-medium leading-relaxed">
+                                Are all fields correct and complete? Once submitted, this form will be sent for PhilHealth review.
+                            </p>
+                            <p className="text-[11px] text-slate-400 italic leading-relaxed">
+                                Note: Final approval or denial of this claim remains at the discretion of PhilHealth based on their guidelines and verification process.
+                            </p>
+                            <div className="flex gap-3 pt-2">
+                                <button
+                                    onClick={() => setShowConfirmModal(false)}
+                                    className="flex-1 px-5 py-3 rounded-xl border border-slate-200 text-xs font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50 transition-all"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setShowConfirmModal(false);
+                                        onSubmit({ ...formData, grandTotalEnough });
+                                    }}
+                                    className="flex-1 px-5 py-3 rounded-xl bg-philhealth-yellow text-philhealth-green text-xs font-black uppercase tracking-widest hover:opacity-90 active:scale-95 transition-all shadow-lg"
+                                >
+                                    Submit
+                                </button>
+                            </div>
+                        </div>
+                    </motion.div>
+                </div>,
+                document.body
+            )}
         </div>
     );
 }

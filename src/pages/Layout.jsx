@@ -1,7 +1,7 @@
 import 'react';
 import { LogOut } from 'lucide-react';
 
-export default function Layout({ children, userEmail, onLogout }) {
+export default function Layout({ children, userEmail, onLogout, isPhilHealth }) {
     return (
         <div className="min-h-screen flex flex-col bg-[#f0f4f0] font-sans text-slate-800">
             {/* Top Navigation Bar */}
@@ -30,7 +30,7 @@ export default function Layout({ children, userEmail, onLogout }) {
                             href="#"
                             className="border-b-2 border-philhealth-yellow pb-1"
                         >
-                            Dashboard
+                            {isPhilHealth ? 'PhilHealth Dashboard' : 'Physician Dashboard'}
                         </a>
                     </nav>
 

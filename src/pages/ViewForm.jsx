@@ -9,7 +9,7 @@ const STEPS = [
     { id: 4, title: 'Certification of Health Care Institution', icon: <CheckSquare size={20} /> },
 ];
 
-export default function ViewForm({ data, onClose }) {
+export default function ViewForm({ data, onClose, isPhilHealth, onApprove, onReject }) {
     const [currentStep, setCurrentStep] = React.useState(1);
 
     if (!data) return null;
@@ -572,6 +572,7 @@ export default function ViewForm({ data, onClose }) {
                 </div>
 
                 {/* Footer Controls */}
+                {/* Footer Controls */}
                 <div className="px-10 py-8 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
                     <button
                         onClick={currentStep === 1 ? onClose : prevStep}
@@ -581,12 +582,37 @@ export default function ViewForm({ data, onClose }) {
                     </button>
 
                     {currentStep === 4 ? (
-                        <button
-                            onClick={onClose}
-                            className="px-10 py-3.5 rounded-xl font-black text-xs uppercase tracking-[0.15em] bg-slate-800 text-white hover:bg-slate-900 transition-all active:scale-95 shadow-md"
-                        >
-                            Close Document
-                        </button>
+                        <div className="flex items-center gap-3">
+                            {isPhilHealth ? (
+                                <>
+                                    <button
+                                        onClick={onClose}
+                                        className="px-6 py-3.5 rounded-xl font-black text-xs uppercase tracking-[0.15em] border border-slate-200 text-slate-500 hover:bg-slate-100 transition-all"
+                                    >
+                                        Close
+                                    </button>
+                                    <button
+                                        onClick={() => onReject(data.id)}
+                                        className="px-8 py-3.5 rounded-xl font-black text-xs uppercase tracking-[0.15em] bg-red-900 text-white hover:bg-red-800 transition-all active:scale-95 shadow-md"
+                                    >
+                                        Reject Claim
+                                    </button>
+                                    <button
+                                        onClick={() => onApprove(data.id)}
+                                        className="px-8 py-3.5 rounded-xl font-black text-xs uppercase tracking-[0.15em] bg-emerald-700 text-white hover:bg-emerald-900 transition-all active:scale-95 shadow-md"
+                                    >
+                                        Approve Claim
+                                    </button>
+                                </>
+                            ) : (
+                                <button
+                                    onClick={onClose}
+                                    className="px-10 py-3.5 rounded-xl font-black text-xs uppercase tracking-[0.15em] bg-slate-800 text-white hover:bg-slate-900 transition-all active:scale-95 shadow-md"
+                                >
+                                    Close Document
+                                </button>
+                            )}
+                        </div>
                     ) : (
                         <button
                             onClick={nextStep}

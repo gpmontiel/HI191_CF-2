@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import ReactDOM from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import Layout from './pages/Layout.jsx';
 import LoginForm from './pages/LoginForm.jsx';
@@ -15,7 +16,10 @@ export default function App() {
   const [forms, setForms] = useState([]); // Initialized clean, waiting for live data
   const [isLoading, setIsLoading] = React.useState(false);
   const [selectedFormData, setSelectedFormData] = useState(null);
-    const [globalToast, setGlobalToast] = useState(null);
+  const [globalToast, setGlobalToast] = useState(null);
+
+  // detect philhealth user
+  const isPhilHealth = user?.email === 'philhealth@email.com';
 
   // Computed state metrics based directly on real database entries
   const stats = {
@@ -29,36 +33,38 @@ export default function App() {
   // 1. UPDATED FETCHING FUNCTION WITH USER FILTER
   const fetchClaimForms = async (userId) => {
     if (!userId) return;
-
     try {
       setIsLoading(true);
-      const { data, error } = await supabase
+      let query = supabase
           .from('ClaimForms2')
           .select(`
-            cf2_id,
-            user_id,
-            date_submitted,
-            status,
-            confinement_info (
-                last_name,
-                first_name,
-                middle_name,
-                name_extension
-            )
-          `)
-          .eq('user_id', userId)
+                cf2_id,
+                user_id,
+                date_submitted,
+                status,
+                confinement_info (
+                    last_name,
+                    first_name,
+                    middle_name,
+                    name_extension
+                )
+            `)
           .order('date_submitted', { ascending: false });
 
+      // PhilHealth sees everything; clinicians only see their own
+      if (!isPhilHealth) {
+        query = query.eq('user_id', userId);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
 
       const formattedForms = (data || []).map((form) => {
         const patient = form.confinement_info;
         const fullName = patient
             ? [patient.first_name, patient.middle_name, patient.last_name, patient.name_extension]
-                .filter(Boolean)
-                .join(' ')
+                .filter(Boolean).join(' ')
             : 'Unknown Patient';
-
         return {
           id: form.cf2_id,
           patient_name: fullName,
@@ -66,10 +72,9 @@ export default function App() {
           status: form.status || 'Pending'
         };
       });
-
       setForms(formattedForms);
     } catch (error) {
-      console.error('Error fetching live tracker lists:', error.message);
+      console.error('Error fetching forms:', error.message);
     } finally {
       setIsLoading(false);
     }
@@ -110,6 +115,39 @@ export default function App() {
 
   const handleNewSubmission = () => setView('form');
   const handleCancelSubmission = () => setView('dashboard');
+
+
+  // FOR THE ACCEPT REJECT ACTIONS
+  const [confirmAction, setConfirmAction] = useState(null); // { type: 'approve'|'reject', id }
+
+  const handleApproveReject = (type, id) => {
+    setConfirmAction({ type, id });
+  };
+
+  const executeApproveReject = async () => {
+    if (!confirmAction) return;
+    const newStatus = confirmAction.type === 'approve' ? 'Approved' : 'Rejected';
+    try {
+      setIsLoading(true);
+      const { error } = await supabase
+          .from('ClaimForms2')
+          .update({ status: newStatus })
+          .eq('cf2_id', confirmAction.id);
+      if (error) throw error;
+
+      // Update local state so table reflects change immediately
+      setForms(prev => prev.map(f =>
+          f.id === confirmAction.id ? { ...f, status: newStatus } : f
+      ));
+      setGlobalToast({ message: `Form ${newStatus} successfully.`, type: 'success' });
+      setView('dashboard');
+    } catch (err) {
+      setGlobalToast({ message: `Failed to update status: ${err.message}`, type: 'error' });
+    } finally {
+      setIsLoading(false);
+      setConfirmAction(null);
+    }
+  };
 
 
   const handleSupabaseSubmit = async (data) => {
@@ -579,18 +617,61 @@ export default function App() {
   };
 
   return (
-      <Layout
-          userEmail={user.email}
-          onLogout={handleLogout}
-      >
-          {/* Global Toast */}
-          {globalToast && (
-              <Toast
-                  message={globalToast.message}
-                  type={globalToast.type}
-                  onClose={() => setGlobalToast(null)}
-              />
-          )}
+      <Layout userEmail={user.email} onLogout={handleLogout} isPhilHealth={isPhilHealth}>
+        {/* Global Toast */}
+        {globalToast && (
+            <Toast
+                message={globalToast.message}
+                type={globalToast.type}
+                onClose={() => setGlobalToast(null)}
+            />
+        )}
+
+        {/* Approve/Reject Confirm Modal */}
+        {confirmAction && ReactDOM.createPortal(
+            <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+              <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-md w-full mx-4 overflow-hidden"
+              >
+                <div className={`p-6 text-white ${confirmAction.type === 'approve' ? 'bg-emerald-600' : 'bg-red-500'}`}>
+                  <h3 className="text-lg font-black tracking-tight capitalize">
+                    {confirmAction.type} this claim?
+                  </h3>
+                  <p className="text-[11px] opacity-70 mt-1">CF-2 Claim Form 2 — ID #{String(confirmAction.id).padStart(9, '0')}</p>
+                </div>
+                <div className="p-6 space-y-4">
+                  <p className="text-sm text-slate-700 font-medium leading-relaxed">
+                    {confirmAction.type === 'approve'
+                        ? 'You are about to approve this claim. This action will notify the submitting clinician.'
+                        : 'You are about to reject this claim. Please ensure you have reviewed all form details before proceeding.'}
+                  </p>
+                  <p className="text-[11px] text-slate-400 italic leading-relaxed">
+                    This status update will be reflected on the clinician's dashboard immediately.
+                  </p>
+                  <div className="flex gap-3 pt-2">
+                    <button
+                        onClick={() => setConfirmAction(null)}
+                        className="flex-1 px-5 py-3 rounded-xl border border-slate-200 text-xs font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50 transition-all"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                        onClick={executeApproveReject}
+                        className={`flex-1 px-5 py-3 rounded-xl text-white text-xs font-black uppercase tracking-widest hover:opacity-90 active:scale-95 transition-all shadow-lg ${
+                            confirmAction.type === 'approve' ? 'bg-emerald-600' : 'bg-red-500'
+                        }`}
+                    >
+                      Confirm {confirmAction.type}
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </div>,
+            document.body
+        )}
 
         <AnimatePresence mode="wait">
           {view === 'dashboard' && (
@@ -602,58 +683,74 @@ export default function App() {
                   transition={{ duration: 0.2 }}
                   className="flex flex-col lg:flex-row gap-6"
               >
-                {/* LEFT SIDEBAR */}
-                <aside className="w-full lg:w-72 flex flex-col gap-6">
-                  {/* NEW FORM */}
-                  <div className="bg-white rounded-2xl shadow-sm p-6 border-l-4 border-philhealth-yellow">
-                    <h3 className="font-bold text-emerald-900 mb-2">
-                      New Submission
-                    </h3>
-                    <p className="text-xs text-slate-500 mb-6 italic">
-                      Fill out CF2 claim form here.
-                    </p>
-                    <button
-                        onClick={handleNewSubmission}
-                        className="w-full bg-philhealth-green hover:bg-philhealth-green-dark text-white font-bold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2"
-                    >
-                      <Plus size={20} />
-                      Start New Form
-                    </button>
-                  </div>
-
-                  {/* STATS */}
-                  <div className="bg-philhealth-green rounded-2xl p-6 text-white shadow-xl">
-                    <h3 className="text-philhealth-yellow text-[10px] font-bold uppercase mb-6 tracking-widest">
-                      Submission Summary
-                    </h3>
-                    <div className="space-y-6">
-                      <div>
-                        <div className="flex justify-between">
-                          <span className="text-xs opacity-70">
-                            Active Reviews
-                          </span>
-                          <span className="text-2xl font-bold">
-                            {String(stats.pending).padStart(2, '0')}
-                          </span>
-                        </div>
-                        <div className="h-1.5 bg-emerald-950/40 rounded-full overflow-hidden">
-                          <motion.div
-                              initial={{ width: 0 }}
-                              animate={{ width: `${forms.length ? (stats.pending / forms.length) * 100 : 0}%` }}
-                              className="h-full bg-philhealth-yellow"
-                          />
+                {/* Clinician sidebar — hidden for PhilHealth */}
+                {!isPhilHealth && (
+                    <aside className="w-full lg:w-72 flex flex-col gap-6">
+                      <div className="bg-white rounded-2xl shadow-sm p-6 border-l-4 border-philhealth-yellow">
+                        <h3 className="font-bold text-emerald-900 mb-2">New Submission</h3>
+                        <p className="text-xs text-slate-500 mb-6 italic">Fill out CF2 claim form here.</p>
+                        <button
+                            onClick={handleNewSubmission}
+                            className="w-full bg-philhealth-green hover:bg-philhealth-green-dark text-white font-bold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2"
+                        >
+                          <Plus size={20} />
+                          Start New Form
+                        </button>
+                      </div>
+                      <div className="bg-philhealth-green rounded-2xl p-6 text-white shadow-xl">
+                        <h3 className="text-philhealth-yellow text-[10px] font-bold uppercase mb-6 tracking-widest">
+                          Submission Summary
+                        </h3>
+                        <div className="space-y-6">
+                          <div>
+                            <div className="flex justify-between">
+                              <span className="text-xs opacity-70">Active Reviews</span>
+                              <span className="text-2xl font-bold">{String(stats.pending).padStart(2, '0')}</span>
+                            </div>
+                            <div className="h-1.5 bg-emerald-950/40 rounded-full overflow-hidden">
+                              <motion.div
+                                  initial={{ width: 0 }}
+                                  animate={{ width: `${forms.length ? (stats.pending / forms.length) * 100 : 0}%` }}
+                                  className="h-full bg-philhealth-yellow"
+                              />
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </div>
-                </aside>
+                    </aside>
+                )}
 
-                {/* LIVE TABLE TRACKER */}
-                <StatusTable
-                    forms={forms}
-                    isLoading={isLoading}
-                    onView={handleViewFormDetails}
-                />
+                {/* PhilHealth gets a compact stats bar above the full-width table */}
+                {isPhilHealth && (
+                    <div className="w-full flex flex-col gap-6">
+                      <div className="grid grid-cols-3 gap-4">
+                        {[
+                          { label: 'Pending Review', value: stats.pending, color: 'bg-amber-50 border-amber-200 text-amber-700' },
+                          { label: 'Approved',       value: stats.approved, color: 'bg-emerald-50 border-emerald-200 text-emerald-700' },
+                          { label: 'Rejected',       value: stats.rejected, color: 'bg-red-50 border-red-200 text-red-700' },
+                        ].map(({ label, value, color }) => (
+                            <div key={label} className={`rounded-2xl border p-5 flex items-center justify-between ${color}`}>
+                              <span className="text-xs font-black uppercase tracking-widest opacity-70">{label}</span>
+                              <span className="text-3xl font-black">{String(value).padStart(2, '0')}</span>
+                            </div>
+                        ))}
+                      </div>
+                      <StatusTable
+                          forms={forms}
+                          isLoading={isLoading}
+                          onView={handleViewFormDetails}
+                      />
+                    </div>
+                )}
+
+                {/* Clinician table */}
+                {!isPhilHealth && (
+                    <StatusTable
+                        forms={forms}
+                        isLoading={isLoading}
+                        onView={handleViewFormDetails}
+                    />
+                )}
               </motion.div>
           )}
 
@@ -671,6 +768,9 @@ export default function App() {
                 <ViewForm
                     data={selectedFormData}
                     onClose={() => setView('dashboard')}
+                    isPhilHealth={isPhilHealth}
+                    onApprove={(id) => handleApproveReject('approve', id)}
+                    onReject={(id) => handleApproveReject('reject', id)}
                 />
               </motion.div>
           )}
