@@ -160,7 +160,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
         consentLiabilityFree: false,
 
         // Part IV
-        hci_name: '',
+        hci_representative_name: '',
         designation: '',
         date_signed: '',
         finalCertification: false,
@@ -348,7 +348,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                 second_case_rate: philhealthData?.second_case_rate || ''
             },
 
-            professionals: profData || []
+            professionals: []
         }));
     };
 
@@ -506,7 +506,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                 <div className="space-y-8">
                                     {/* HCI Name Dropdown */}
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">
+                                        <label className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">
                                             Name of Health Care Institution
                                         </label>
                                         {hciLoading ? (
@@ -575,7 +575,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
 
                                     {/* 1. PATIENT NAME SEARCH */}
                                     <div className="space-y-2 relative">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">
+                                        <label className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">
                                             1. Name of Patient
                                         </label>
                                         <input
@@ -627,7 +627,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
 
                                             {/* 2. Was patient referred? */}
                                             <div className="space-y-4 p-6 bg-slate-50 rounded-2xl border border-slate-100">
-                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">
+                                                <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">
                                                     2. Was patient referred by another Health Care Institution (HCI)?
                                                 </p>
                                                 <div className="flex gap-6">
@@ -647,7 +647,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
 
                                             {/* 3. Confinement Period */}
                                             <div className="space-y-3 p-6 bg-slate-50 rounded-2xl border border-slate-100">
-                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">3. Confinement Period</p>
+                                                <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">3. Confinement Period</p>
                                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                                     <FormInput label="Date Admitted"     name="date_admitted"  value={formatDate(formData.date_time_admitted)}   onChange={() => {}} disabled />
                                                     <FormInput label="Time Admitted"     name="time_admitted"  value={formatTime(formData.date_time_admitted)}   onChange={() => {}} disabled />
@@ -658,7 +658,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
 
                                             {/* 4. Patient Disposition */}
                                             <div className="space-y-3 p-6 bg-slate-50 rounded-2xl border border-slate-100">
-                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">4. Patient Disposition</p>
+                                                <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">4. Patient Disposition</p>
                                                 <div className="flex flex-wrap gap-3">
                                                     {['Improved','Recovered','Home/Discharged Against Medical Advise','Absconded','Expired','Transferred/Referred'].map(opt => (
                                                         <span key={opt} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase border ${formData.disposition === opt ? 'bg-philhealth-green text-white border-philhealth-green' : 'bg-white text-slate-300 border-slate-200'}`}>
@@ -670,7 +670,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
 
                                             {/* 5. Type of Accommodation */}
                                             <div className="space-y-3 p-6 bg-slate-50 rounded-2xl border border-slate-100">
-                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">5. Type of Accommodation</p>
+                                                <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">5. Type of Accommodation</p>
                                                 <div className="flex gap-4">
                                                     {['Private','Non-Private (Charity/Service)'].map(opt => (
                                                         <span key={opt} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase border ${formData.accomodation_type === opt ? 'bg-philhealth-green text-white border-philhealth-green' : 'bg-white text-slate-300 border-slate-200'}`}>
@@ -682,7 +682,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
 
                                             {/* 6. Admission Diagnosis — free text, doctor fills this */}
                                             <div className="space-y-2">
-                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">6. Admission Diagnosis/es</p>
+                                                <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">6. Admission Diagnosis/es</p>
                                                 <textarea
                                                     name="admission_diagnosis"
                                                     value={formData.admission_diagnosis || ''}
@@ -694,7 +694,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
 
                                             {/* 7. Discharge Diagnosis — from discharge_diagnosis table */}
                                             <div className="space-y-4">
-                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">7. Discharge Diagnosis/es</p>
+                                                <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">7. Discharge Diagnosis/es</p>
                                                 {formData.discharge_diagnoses.length === 0 ? (
                                                     <p className="text-xs text-slate-400 italic px-1">No discharge diagnoses found for this patient.</p>
                                                 ) : (
@@ -703,7 +703,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                             <thead className="bg-slate-50 border-b border-slate-100">
                                                             <tr>
                                                                 {['Diagnosis','ICD-10 Code','Related Procedure','RVS Code','Date of Procedure','Laterality'].map(h => (
-                                                                    <th key={h} className="px-4 py-3 text-left font-black text-slate-400 uppercase tracking-wider">{h}</th>
+                                                                    <th key={h} className="px-4 py-3 text-left font-black text-slate-900 uppercase tracking-wider">{h}</th>
                                                                 ))}
                                                             </tr>
                                                             </thead>
@@ -711,11 +711,11 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                             {formData.discharge_diagnoses.map((d, i) => (
                                                                 <tr key={d.diagnosis_id} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
                                                                     <td className="px-4 py-3 font-bold text-slate-700">{d.diagnosis || '—'}</td>
-                                                                    <td className="px-4 py-3 text-slate-500">{d.icd_code || '—'}</td>
-                                                                    <td className="px-4 py-3 text-slate-500">{d.related_procedure || '—'}</td>
-                                                                    <td className="px-4 py-3 text-slate-500">{d.rvs_code || '—'}</td>
-                                                                    <td className="px-4 py-3 text-slate-500">{d.procedure_date || '—'}</td>
-                                                                    <td className="px-4 py-3 text-slate-500">{d.laterality || '—'}</td>
+                                                                    <td className="px-4 py-3 text-slate-600">{d.icd_code || '—'}</td>
+                                                                    <td className="px-4 py-3 text-slate-600">{d.related_procedure || '—'}</td>
+                                                                    <td className="px-4 py-3 text-slate-600">{d.rvs_code || '—'}</td>
+                                                                    <td className="px-4 py-3 text-slate-600">{d.procedure_date || '—'}</td>
+                                                                    <td className="px-4 py-3 text-slate-600">{d.laterality || '—'}</td>
                                                                 </tr>
                                                             ))}
                                                             </tbody>
@@ -727,9 +727,9 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                             {/* --- NEW ADDITION: 8. Special Considerations --- */}
                                             <div className="space-y-4 p-6 bg-slate-50 rounded-2xl border border-slate-100">
                                                 <div className="space-y-1">
-                                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">8. Special Considerations</p>
-                                                    <p className="text-[10px] text-slate-400 italic font-medium leading-relaxed">
-                                                        a. For the following repetitive procedures, check box that applies and enumerate the procedure/sessions dates [mm-dd-yyyy]. For chemotherapy, see guidelines.
+                                                    <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">8. Special Considerations</p>
+                                                    <p className="text-[10px] text-slate-600 italic font-medium leading-relaxed">
+                                                        a. For the following repetitive procedures, select procedure/s that applies and enumerate the procedure/sessions dates [mm-dd-yyyy]. For chemotherapy, see guidelines.
                                                     </p>
                                                 </div>
 
@@ -1079,7 +1079,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
 
                                             {/* --- 9. PhilHealth Benefits Section --- */}
                                             <div className="space-y-3 p-6 bg-slate-50 rounded-2xl border border-slate-100">
-                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">9. PhilHealth Benefits</p>
+                                                <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">9. PhilHealth Benefits</p>
 
                                                 <div className="p-6 bg-slate-50/50 grid grid-cols-1 md:grid-cols-2 gap-6">
                                                     <FormInput
@@ -1101,7 +1101,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                             <div className="space-y-3 p-6 bg-slate-50 rounded-2xl border border-slate-100">
                                                 <div className="flex justify-between items-center border-b border-slate-200 pb-4">
                                                     <div>
-                                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">
+                                                        <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">
                                                             10. Accreditation 
                                                         </p>
                                                     </div>
@@ -1127,15 +1127,15 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
 
                                                         <div className="col-span-12 md:col-span-7 grid grid-cols-3 gap-3">
                                                             <div className="col-span-1">
-                                                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mb-1">Date Signed</label>
+                                                                <label className="block text-[10px] font-black text-slate-900 uppercase tracking-[0.15em] mb-1">Date Signed</label>
                                                                 <input type="date" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-philhealth-green/20 outline-none transition-all" value={prof.date} onChange={(e) => handleProfessionalChange(index, 'date', e.target.value)} />
                                                             </div>
                                                             <div className="col-span-2">
-                                                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mb-1">Accreditation No.</label>
+                                                                <label className="block text-[10px] font-black text-slate-900 uppercase tracking-[0.15em] mb-1">Accreditation No.</label>
                                                                 <input className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-philhealth-green/20 outline-none transition-all" value={prof.accreditation_number} onChange={(e) => handleProfessionalChange(index, 'accreditation_number', e.target.value)} />
                                                             </div>
                                                             <div className="col-span-3">
-                                                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mb-1">Name</label>
+                                                                <label className="block text-[10px] font-black text-slate-900 uppercase tracking-[0.15em] mb-1">Name</label>
                                                                 <input className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-philhealth-green/20 outline-none transition-all" value={prof.name} onChange={(e) => handleProfessionalChange(index, 'name', e.target.value)} />
                                                             </div>
                                                         </div>
@@ -1147,7 +1147,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                             </label>
                                                             <label className="flex items-center text-[11px] text-slate-700">
                                                                 <input type="radio" name={`copay-${index}`} checked={!!prof.is_copay} onChange={() => handleProfessionalChange(index, 'is_copay', true)} className="mr-2" />
-                                                                <span>With co-pay P</span>
+                                                                <span>With co-pay: Php</span>
                                                                 <input className="ml-2 w-24 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-philhealth-green/20 outline-none transition-all" value={prof.copay_amount} onChange={(e) => handleProfessionalChange(index, 'copay_amount', e.target.value)} />
                                                             </label>
                                                         </div>
@@ -1178,7 +1178,6 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                         name="certifiedEnough"
                                                         checked={formData.certifiedEnough}
                                                         onChange={handleChange}
-                                                        disabled={formData.consumedPrior}
                                                         className="w-6 h-6 rounded border-slate-300 text-philhealth-green focus:ring-philhealth-green cursor-pointer transition-all disabled:opacity-30"
                                                     />
                                                 </div>
@@ -1225,7 +1224,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
 
                                         <div className="flex items-center gap-4 py-2">
                                             <div className="flex-1 h-px bg-slate-200"></div>
-                                            <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">OR</span>
+                                            <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">AND/OR</span>
                                             <div className="flex-1 h-px bg-slate-200"></div>
                                         </div>
 
@@ -1238,7 +1237,6 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                         name="consumedPrior"
                                                         checked={formData.consumedPrior}
                                                         onChange={handleChange}
-                                                        disabled={formData.certifiedEnough}
                                                         className="w-6 h-6 rounded border-slate-300 text-philhealth-green focus:ring-philhealth-green cursor-pointer transition-all disabled:opacity-30"
                                                     />
                                                 </div>
@@ -1644,8 +1642,8 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                     <div className="grid grid-cols-1">
                                         <FormInput
                                             label="Name of Authorized HCI Representative"
-                                            name="hci_name"
-                                            value={formData.hci_name}
+                                            name="hci_representative_name"
+                                            value={formData.hci_representative_name}
                                             onChange={handleChange}
                                         />
                                     </div>

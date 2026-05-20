@@ -339,106 +339,109 @@ export default function ViewForm({ data, onClose }) {
                                             A. CERTIFICATION OF CONSUMPTION OF BENEFITS:
                                         </h3>
 
-                                        {data.certifiedEnough ? (
-                                            <div className="p-6 bg-amber-50 rounded-2xl border border-amber-100 space-y-6">
-                                                <div className="space-y-1">
-                                                    <div className="flex items-center gap-3 text-amber-800 font-bold text-xs uppercase tracking-wider">
-                                                        ✓ PhilHealth benefit was enough to cover HCI and PF Charges.
+                                        <div className="space-y-6"> {/* Optional wrapper to add consistent spacing between the cards if both show */}
+
+                                            {/* Block 1: Enough Coverage (Shows if certifiedEnough is checked) */}
+                                            {data.certifiedEnough && (
+                                                <div className="p-6 bg-amber-50 rounded-2xl border border-amber-100 space-y-6">
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-center gap-3 text-amber-800 font-bold text-xs uppercase tracking-wider">
+                                                            ✓ PhilHealth benefit was enough to cover HCI and PF Charges.
+                                                        </div>
+                                                        <p className="text-[11px] text-amber-700">
+                                                            No purchase of drugs/medicines, supplies, diagnostics, and co-pay for professional fees by the member/patient.
+                                                        </p>
+                                                    </div>
+                                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 border-t border-emerald-200/50">
+                                                        <ReadOnlyDisplay label="Total HCI Fees" value={data.hciFeesEnough} />
+                                                        <ReadOnlyDisplay label="Total Professional Fees" value={data.pfFeesEnough} />
+                                                        <ReadOnlyDisplay label="Grand Total" value={grandTotalEnough} />
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Block 2: Completely Consumed or with Purchases (Shows if consumedPrior is checked) */}
+                                            {data.consumedPrior && (
+                                                <div className="p-6 bg-amber-50 rounded-2xl border border-amber-100 space-y-8">
+                                                    <div className="text-amber-800 font-bold text-xs uppercase tracking-wider">
+                                                        ✓ The benefit of the member/patient was completely consumed prior to co-pay OR the benefit of the member/patient is not completely consumed BUT with purchases/expenses for drugs/medicines, supplies, diagnostics and others.
                                                     </div>
 
-                                                    <p className="text-[11px] text-amber-700">
-                                                        No purchase of drugs/medicines, supplies, diagnostics, and co-pay for professional fees by the member/patient.
-                                                    </p>
-                                                </div>
-                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 border-t border-emerald-200/50">
-                                                    <ReadOnlyDisplay label="Total HCI Fees" value={data.hciFeesEnough} />
-                                                    <ReadOnlyDisplay label="Total Professional Fees" value={data.pfFeesEnough} />
-                                                    <ReadOnlyDisplay label="Grand Total" value={grandTotalEnough} />
-                                                </div>
-                                            </div>
-                                        ) : data.consumedPrior ? (
-                                            <div className="p-6 bg-amber-50 rounded-2xl border border-amber-100 space-y-8">
-                                                <div className="text-amber-800 font-bold text-xs uppercase tracking-wider">
-                                                    ✓ The benefit of the member/patient was completely consumed prior to co-pay OR the benefit of the member/patient is not completely consumed BUT with
-                                                    purchases/expenses for drugs/medicines, supplies, diagnostics and others.
-                                                </div>
-
-                                                <div className="pt-4 border-t border-amber-200/50">
-                                                    <div className="mb-5">
-                                                        <h4 className="text-xs font-black uppercase tracking-wider text-amber-700">
-                                                            Total Co-Pay Breakdown
-                                                        </h4>
-                                                    </div>
-
-                                                    {/* HCI Breakdown */}
-                                                    <div className="space-y-4 pl-4 border-l-2 border-amber-200">
-                                                        <h4 className="text-[10px] font-black uppercase text-slate-900 tracking-wider">
-                                                            1. Health Care Institution Fees
-                                                        </h4>
-
-                                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                                            <ReadOnlyDisplay label="Actual Charges" value={data.hciActualCharges} />
-                                                            <ReadOnlyDisplay label="After Discount" value={data.hciDiscount} />
-                                                            <ReadOnlyDisplay label="PhilHealth Benefit" value={data.hciPhilhealthBenefit} />
-                                                            <ReadOnlyDisplay label="Co-pay Amount" value={data.hciAfterDeductionAmount} />
+                                                    <div className="pt-4 border-t border-amber-200/50">
+                                                        <div className="mb-5">
+                                                            <h4 className="text-xs font-black uppercase tracking-wider text-amber-700">
+                                                                Total Co-Pay Breakdown
+                                                            </h4>
                                                         </div>
 
-                                                        <div className="text-[12px] font-bold text-slate-600">
-                                                            Paid by: {[
-                                                            data.hciDeductionPayers?.member && 'Member/Patient',
-                                                            data.hciDeductionPayers?.hmo && 'HMO',
-                                                            data.hciDeductionPayers?.others && 'Others'
-                                                        ].filter(Boolean).join(', ') || 'None stated'}
+                                                        {/* HCI Breakdown */}
+                                                        <div className="space-y-4 pl-4 border-l-2 border-amber-200">
+                                                            <h4 className="text-[10px] font-black uppercase text-slate-900 tracking-wider">
+                                                                1. Health Care Institution Fees
+                                                            </h4>
+                                                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                                                <ReadOnlyDisplay label="Actual Charges" value={data.hciActualCharges} />
+                                                                <ReadOnlyDisplay label="After Discount" value={data.hciDiscount} />
+                                                                <ReadOnlyDisplay label="PhilHealth Benefit" value={data.hciPhilhealthBenefit} />
+                                                                <ReadOnlyDisplay label="Co-pay Amount" value={data.hciAfterDeductionAmount} />
+                                                            </div>
+                                                            <div className="text-[12px] font-bold text-slate-600">
+                                                                Paid by: {[
+                                                                data.hciDeductionPayers?.member && 'Member/Patient',
+                                                                data.hciDeductionPayers?.hmo && 'HMO',
+                                                                data.hciDeductionPayers?.others && 'Others'
+                                                            ].filter(Boolean).join(', ') || 'None stated'}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* PF Breakdown */}
+                                                        <div className="space-y-4 pl-4 border-l-2 border-amber-200 mt-6">
+                                                            <h4 className="text-[10px] font-black uppercase text-slate-800 tracking-wider">
+                                                                2. Professional Fees
+                                                            </h4>
+                                                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                                                <ReadOnlyDisplay label="Actual Charges" value={data.pfActualCharges} />
+                                                                <ReadOnlyDisplay label="After Discount" value={data.pfDiscount} />
+                                                                <ReadOnlyDisplay label="PhilHealth Benefit" value={data.pfPhilhealthBenefit} />
+                                                                <ReadOnlyDisplay label="Co-pay Amount" value={data.pfAfterDeductionAmount} />
+                                                            </div>
+                                                            <div className="text-[12px] font-bold text-slate-600">
+                                                                Paid by: {[
+                                                                data.pfDeductionPayers?.member && 'Member/Patient',
+                                                                data.pfDeductionPayers?.hmo && 'HMO',
+                                                                data.pfDeductionPayers?.others && 'Others'
+                                                            ].filter(Boolean).join(', ') || 'None stated'}
+                                                            </div>
                                                         </div>
                                                     </div>
 
-                                                    {/* PF Breakdown */}
-                                                    <div className="space-y-4 pl-4 border-l-2 border-amber-200 mt-6">
-                                                        <h4 className="text-[10px] font-black uppercase text-slate-800 tracking-wider">
-                                                            2. Professional Fees
-                                                        </h4>
-
-                                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                                            <ReadOnlyDisplay label="Actual Charges" value={data.pfActualCharges} />
-                                                            <ReadOnlyDisplay label="After Discount" value={data.pfDiscount} />
-                                                            <ReadOnlyDisplay label="PhilHealth Benefit" value={data.pfPhilhealthBenefit} />
-                                                            <ReadOnlyDisplay label="Co-pay Amount" value={data.pfAfterDeductionAmount} />
+                                                    {/* Outside Purchases */}
+                                                    <div className="pt-4 border-t border-amber-200/50">
+                                                        <div className="mb-4">
+                                                            <h4 className="text-xs font-black uppercase tracking-wider text-amber-700">
+                                                                Purchases/Expenses Not Included in HCI Charges
+                                                            </h4>
                                                         </div>
-
-                                                        <div className="text-[12px] font-bold text-slate-600">
-                                                            Paid by: {[
-                                                            data.pfDeductionPayers?.member && 'Member/Patient',
-                                                            data.pfDeductionPayers?.hmo && 'HMO',
-                                                            data.pfDeductionPayers?.others && 'Others'
-                                                        ].filter(Boolean).join(', ') || 'None stated'}
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                            <ReadOnlyDisplay
+                                                                label="Total Cost of Purchased Medicines & Supplies"
+                                                                value={data.drugsCostType === 'amount' ? data.drugsAmount : 'None'}
+                                                            />
+                                                            <ReadOnlyDisplay
+                                                                label="Total Diagnostic & Laboratory Costs"
+                                                                value={data.diagnosticCostType === 'amount' ? data.diagnosticAmount : 'None'}
+                                                            />
                                                         </div>
                                                     </div>
                                                 </div>
+                                            )}
 
-                                                {/* Outside Purchases */}
-                                                <div className="pt-4 border-t border-amber-200/50">
-                                                    <div className="mb-4">
-                                                        <h4 className="text-xs font-black uppercase tracking-wider text-amber-700">
-                                                            Purchases/Expenses Not Included in HCI Charges
-                                                        </h4>
-                                                    </div>
+                                            {/* Fallback Placeholder: Shows only if NEITHER checkbox is checked */}
+                                            {!data.certifiedEnough && !data.consumedPrior && (
+                                                <p className="text-xs text-slate-400 italic">No structural benefit configurations declared.</p>
+                                            )}
 
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                        <ReadOnlyDisplay
-                                                            label="Total Cost of Purchased Medicines & Supplies"
-                                                            value={data.drugsCostType === 'amount' ? data.drugsAmount : 'None'}
-                                                        />
-
-                                                        <ReadOnlyDisplay
-                                                            label="Total Diagnostic & Laboratory Costs"
-                                                            value={data.diagnosticCostType === 'amount' ? data.diagnosticAmount : 'None'}
-                                                        />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <p className="text-xs text-slate-400 italic">No structural benefit configurations declared.</p>
-                                        )}
+                                        </div>
                                     </section>
 
                                     {/* SECTION B */}

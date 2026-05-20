@@ -566,7 +566,7 @@ export default function App() {
           consentMedicalRecords:   part3.consent_medical_records || false,
           consentLiabilityFree:    part3.consent_liability_free || false,
 
-          hci_name:          part4.hci_name || '',
+          hci_name:          part4.hci_representative_name || '',
           designation:       part4.designation || '',
           date_signed:       part4.date || '',
           finalCertification: part4.is_certified || false,
