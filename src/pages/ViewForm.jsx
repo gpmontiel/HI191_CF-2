@@ -160,10 +160,43 @@ export default function ViewForm({ data, onClose }) {
                                         <div className="flex flex-wrap gap-3">
                                             {['Improved','Recovered','Home/Discharged Against Medical Advise','Absconded','Expired','Transferred/Referred'].map(opt => (
                                                 <span key={opt} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase border ${data.disposition === opt ? 'bg-philhealth-green text-white border-philhealth-green' : 'bg-white text-slate-300 border-slate-200'}`}>
-                        {opt}
-                    </span>
+                                                    {opt}
+                                                </span>
                                             ))}
                                         </div>
+
+                                        {/* Expired */}
+                                        {data.disposition === 'Expired' && (
+                                            <div className="grid grid-cols-2 gap-4 pt-3 border-t border-slate-200 mt-2">
+                                                <ReadOnlyDisplay
+                                                    label="Date of Expiration"
+                                                    value={data.date_time_expiration
+                                                        ? new Date(data.date_time_expiration).toLocaleDateString('en-PH', { month:'2-digit', day:'2-digit', year:'2-digit' })
+                                                        : ''}
+                                                />
+                                                <ReadOnlyDisplay
+                                                    label="Time of Expiration"
+                                                    value={data.date_time_expiration
+                                                        ? new Date(data.date_time_expiration).toLocaleTimeString('en-PH', { hour:'numeric', minute:'2-digit', hour12: true })
+                                                        : ''}
+                                                />
+                                            </div>
+                                        )}
+
+                                        {/* Transferred/Referred */}
+                                        {data.disposition === 'Transferred/Referred' && (
+                                            <div className="space-y-4 pt-3 border-t border-slate-200 mt-2">
+                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Transferred / Referred To:</p>
+                                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                                    <ReadOnlyDisplay label="HCI Name"             value={data.transferred_hci_name} />
+                                                    <ReadOnlyDisplay label="Building / Street"    value={data.transferred_street} />
+                                                    <ReadOnlyDisplay label="City / Municipality"  value={data.transferred_city} />
+                                                    <ReadOnlyDisplay label="Province"             value={data.transferred_province} />
+                                                    <ReadOnlyDisplay label="Zip Code"             value={data.transferred_zip} />
+                                                </div>
+                                                <ReadOnlyDisplay label="Reason for Referral / Transfer" value={data.reason_referral} />
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* 5. Accommodation */}
@@ -172,8 +205,8 @@ export default function ViewForm({ data, onClose }) {
                                         <div className="flex gap-4">
                                             {['Private','Non-Private (Charity/Service)'].map(opt => (
                                                 <span key={opt} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase border ${data.accomodation_type === opt ? 'bg-philhealth-green text-white border-philhealth-green' : 'bg-white text-slate-300 border-slate-200'}`}>
-                        {opt}
-                    </span>
+                                                    {opt}
+                                                </span>
                                             ))}
                                         </div>
                                     </div>
@@ -182,6 +215,40 @@ export default function ViewForm({ data, onClose }) {
                                     <div className="space-y-2">
                                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">6. Admission Diagnosis/es</p>
                                         <ReadOnlyDisplay value={data.admission_diagnosis} isTextArea={true} />
+                                    </div>
+
+                                    {/* 7. Discharge Diagnosis  */}
+                                    <div className="space-y-3">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">7. Discharge Diagnosis/es</p>
+                                        {!data.discharge_diagnoses || data.discharge_diagnoses.length === 0 ? (
+                                            <div className="px-5 py-4 bg-slate-50/80 border border-slate-200/60 rounded-xl text-xs italic text-slate-300 font-normal">
+                                                Left Blank
+                                            </div>
+                                        ) : (
+                                            <div className="overflow-x-auto rounded-xl border border-slate-100">
+                                                <table className="w-full text-[10px]">
+                                                    <thead className="bg-slate-50 border-b border-slate-100">
+                                                    <tr>
+                                                        {['Diagnosis', 'ICD-10 Code', 'Related Procedure', 'RVS Code', 'Date of Procedure', 'Laterality'].map(h => (
+                                                            <th key={h} className="px-4 py-3 text-left font-black text-slate-400 uppercase tracking-wider">{h}</th>
+                                                        ))}
+                                                    </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                    {data.discharge_diagnoses.map((d, i) => (
+                                                        <tr key={d.diagnosis_id ?? i} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+                                                            <td className="px-4 py-3 font-bold text-slate-700">{d.diagnosis || '—'}</td>
+                                                            <td className="px-4 py-3 text-slate-500">{d.icd_code || '—'}</td>
+                                                            <td className="px-4 py-3 text-slate-500">{d.related_procedure || '—'}</td>
+                                                            <td className="px-4 py-3 text-slate-500">{d.rvs_code || '—'}</td>
+                                                            <td className="px-4 py-3 text-slate-500">{d.procedure_date || '—'}</td>
+                                                            <td className="px-4 py-3 text-slate-500">{d.laterality || '—'}</td>
+                                                        </tr>
+                                                    ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* 8. Special Considerations */}

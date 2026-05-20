@@ -7,6 +7,7 @@ import SubmissionForm from "./pages/SubmissionForm.jsx";
 import ViewForm from "./pages/ViewForm.jsx";
 import { Plus } from 'lucide-react';
 import { supabase } from "./lib/supabase.js";
+import Toast from "./pages/Toast.jsx"
 
 export default function App() {
   const [user, setUser] = React.useState(null);
@@ -14,6 +15,7 @@ export default function App() {
   const [forms, setForms] = useState([]); // Initialized clean, waiting for live data
   const [isLoading, setIsLoading] = React.useState(false);
   const [selectedFormData, setSelectedFormData] = useState(null);
+    const [globalToast, setGlobalToast] = useState(null);
 
   // Computed state metrics based directly on real database entries
   const stats = {
@@ -109,82 +111,10 @@ export default function App() {
   const handleNewSubmission = () => setView('form');
   const handleCancelSubmission = () => setView('dashboard');
 
-  // // Unified submission pipeline pushing directly to your Supabase schema
-  // const handleSupabaseSubmit = async (data) => {
-  //   try {
-  //     setIsLoading(true);
-  //     const parseNum = (val) => val ? parseFloat(val) : null;
-  //     const parseDate = (val) => val ? val : null;
-  //
-  //     // 1. Submit Part 3
-  //     const { error: part3Error } = await supabase
-  //         .from('Part3_Consumption_Consent')
-  //         .insert([
-  //           {
-  //             is_benefit_enough: data.certifiedEnough,
-  //             enough_hci_fees: parseNum(data.hciFeesEnough),
-  //             enough_pf_fees: parseNum(data.pfFeesEnough),
-  //             enough_grand_total: parseNum(data.grandTotalEnough),
-  //             is_benefit_consumed_or_with_purchases: data.consumedPrior,
-  //             hci_actual_charges: parseNum(data.hciActualCharges),
-  //             hci_discount_amount: parseNum(data.hciDiscount),
-  //             hci_philhealth_benefit: parseNum(data.hciPhilhealthBenefit),
-  //             hci_copay_amount: parseNum(data.hciAfterDeductionAmount),
-  //             hci_paid_by_member: data.hciDeductionPayers?.member || false,
-  //             hci_paid_by_hmo: data.hciDeductionPayers?.hmo || false,
-  //             hci_paid_by_others: data.hciDeductionPayers?.others || false,
-  //             pf_actual_charges: parseNum(data.pfActualCharges),
-  //             pf_discount_amount: parseNum(data.pfDiscount),
-  //             pf_philhealth_benefit: parseNum(data.pfPhilhealthBenefit),
-  //             pf_copay_amount: parseNum(data.pfAfterDeductionAmount),
-  //             pf_paid_by_member: data.pfDeductionPayers?.member || false,
-  //             pf_paid_by_hmo: data.pfDeductionPayers?.hmo || false,
-  //             pf_paid_by_others: data.pfDeductionPayers?.others || false,
-  //             drugs_cost_type: data.drugsCostType,
-  //             drugs_amount: parseNum(data.drugsAmount),
-  //             diagnostic_cost_type: data.diagnosticCostType,
-  //             diagnostic_amount: parseNum(data.diagnosticAmount),
-  //             representative_name: data.representativeName,
-  //             consent_date_signed: parseDate(data.representativeDateSigned),
-  //             representative_relationship: data.representativeRelationship,
-  //             representative_relationship_others: data.representativeRelationshipSpecify,
-  //             signing_behalf_reason: data.behalfReason,
-  //             signing_behalf_reason_others: data.behalfReasonSpecify,
-  //             consent_medical_records: data.consentMedicalRecords,
-  //             consent_liability_free: data.consentLiabilityFree
-  //           }
-  //         ]);
-  //
-  //     if (part3Error) throw part3Error;
-  //
-  //     // 2. Submit Part 4
-  //     const { error: part4Error } = await supabase
-  //         .from('Part4_Certification')
-  //         .insert([
-  //           {
-  //             hci_name: data.hci_name,
-  //             designation: data.designation,
-  //             date: parseDate(data.date_signed),
-  //             is_certified: data.finalCertification
-  //           }
-  //         ]);
-  //
-  //     if (part4Error) throw part4Error;
-  //
-  //     // 3. Optional: Insert row to ClaimForms2 table if it isn't automatically created by a database trigger
-  //
-  //     alert('Form submitted successfully to Supabase!');
-  //     setView('dashboard'); // Redirecting triggers the tracking hook to refresh lists automatically
-  //   } catch (error) {
-  //     console.error('Supabase Insert Error:', error);
-  //     alert(`Error saving to database: ${error.message}`);
-  //   } finally {
-  //     setIsLoading(false);
-  //   }
-  // };
 
   const handleSupabaseSubmit = async (data) => {
     const { data: { user: authUser } } = await supabase.auth.getUser();
+
     if (!authUser) throw new Error('No authenticated user found. Please log in again.');
 
     try {
@@ -230,6 +160,7 @@ export default function App() {
           }])
           .select()
           .single();
+
       if (part3Error) throw part3Error;
 
       // ---- PART IV ----
@@ -243,6 +174,7 @@ export default function App() {
           }])
           .select()
           .single();
+
       if (part4Error) throw part4Error;
 
       // ---- SPECIAL CONSIDERATION parent row ----
@@ -359,6 +291,17 @@ export default function App() {
       }
 
       // ---- CLAIMFORMS2 master record ----
+        // ---- Update admission_diagnosis on the existing confinement_info row ----
+        if (data.confinement_id && data.admission_diagnosis) {
+            const { error: confinementError } = await supabase
+                .from('confinement_info')
+                .update({ admission_diagnosis: data.admission_diagnosis })
+                .eq('confinement_id', data.confinement_id);
+
+            if (confinementError) throw confinementError;
+        }
+
+      // ---- ClaimForms2 master record — ties everything together ----
       const { data: cf2Data, error: cf2Error } = await supabase
           .from('ClaimForms2')
           .insert([{
@@ -371,6 +314,7 @@ export default function App() {
           }])
           .select()
           .single();
+
       if (cf2Error) throw cf2Error;
 
       // Update local state so dashboard reflects the new row immediately
@@ -381,12 +325,35 @@ export default function App() {
         submission_date: new Date().toISOString().split('T')[0],
       }, ...prev]);
 
-      alert('Form submitted successfully!');
+        // ---- Discharge Diagnoses insert ----
+        if (data.discharge_diagnoses && data.discharge_diagnoses.length > 0) {
+            const diagRows = data.discharge_diagnoses
+                .filter(d => d.diagnosis?.trim()) // skip empty rows
+                .map(d => ({
+                    confinement_id:    data.confinement_id,
+                    diagnosis:         d.diagnosis        || null,
+                    icd_code:          d.icd_code         || null,
+                    related_procedure: d.related_procedure || null,
+                    rvs_code:          d.rvs_code          || null,
+                    procedure_date:    d.procedure_date    || null,
+                    laterality:        d.laterality        || null,
+                }));
+
+            if (diagRows.length > 0) {
+                const { error: diagError } = await supabase
+                    .from('discharge_diagnosis')
+                    .insert(diagRows);
+
+                if (diagError) throw diagError;
+            }
+        }
+
+      setGlobalToast({ message: 'Form submitted successfully!', type: 'success' });
       setView('dashboard');
 
     } catch (error) {
       console.error('Supabase Insert Error:', error);
-      alert(`Error saving to database: ${error.message}`);
+      setGlobalToast({ message: `Error saving to database: ${error.message}`, type: 'error' });
     } finally {
       setIsLoading(false);
     }
@@ -405,7 +372,10 @@ export default function App() {
           confinement_id,
           status,
           hci_info (*),
-          confinement_info (*),
+          confinement_info (
+            *,
+            discharge_diagnosis (*)
+          ),
           Part3_Consumption_Consent (*),
           Part4_Certification (*)
         `)
@@ -508,6 +478,14 @@ export default function App() {
           disposition:              patient.disposition || '',
           accomodation_type:        patient.accomodation_type || '',
           admission_diagnosis:      patient.admission_diagnosis || '',
+            discharge_diagnoses:     patient.discharge_diagnosis || [],
+            date_time_expiration:  patient.date_time_expiration  || '',
+            transferred_hci_name:  patient.transferred_hci_name  || '',
+            transferred_street:    patient.transferred_street    || '',
+            transferred_city:      patient.transferred_city      || '',
+            transferred_province:  patient.transferred_province  || '',
+            transferred_zip:       patient.transferred_zip       || '',
+            reason_referral:       patient.reason_referral       || '',
 
           // Special considerations
           special_considerations: {
@@ -599,6 +577,15 @@ export default function App() {
           userEmail={user.email}
           onLogout={handleLogout}
       >
+          {/* Global Toast */}
+          {globalToast && (
+              <Toast
+                  message={globalToast.message}
+                  type={globalToast.type}
+                  onClose={() => setGlobalToast(null)}
+              />
+          )}
+
         <AnimatePresence mode="wait">
           {view === 'dashboard' && (
               <motion.div
