@@ -114,7 +114,7 @@ export default function ViewForm({ data, onClose }) {
 
                                     {/* 1. Name */}
                                     <div className="space-y-3">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">1. Name of Patient</p>
+                                        <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">1. Name of Patient</p>
                                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-6 bg-emerald-50/50 rounded-2xl border border-emerald-100">
                                             <ReadOnlyDisplay label="Last Name"      value={data.patient_last_name} />
                                             <ReadOnlyDisplay label="First Name"     value={data.patient_first_name} />
@@ -125,7 +125,7 @@ export default function ViewForm({ data, onClose }) {
 
                                     {/* 2. Referred */}
                                     <div className="space-y-3 p-6 bg-slate-50 rounded-2xl border border-slate-100">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">
+                                        <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">
                                             2. Was patient referred by another HCI?
                                         </p>
                                         <div className="flex gap-4">
@@ -145,7 +145,7 @@ export default function ViewForm({ data, onClose }) {
 
                                     {/* 3. Confinement Period */}
                                     <div className="space-y-3 p-6 bg-slate-50 rounded-2xl border border-slate-100">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">3. Confinement Period</p>
+                                        <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">3. Confinement Period</p>
                                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                             <ReadOnlyDisplay label="Date Admitted"   value={data.date_time_admitted   ? new Date(data.date_time_admitted).toLocaleDateString('en-PH',   { year:'numeric', month:'long', day:'numeric' }) : ''} />
                                             <ReadOnlyDisplay label="Time Admitted"   value={data.date_time_admitted   ? new Date(data.date_time_admitted).toLocaleTimeString('en-PH',   { hour:'numeric', minute:'2-digit', hour12:true }) : ''} />
@@ -156,7 +156,7 @@ export default function ViewForm({ data, onClose }) {
 
                                     {/* 4. Disposition */}
                                     <div className="space-y-3 p-6 bg-slate-50 rounded-2xl border border-slate-100">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">4. Patient Disposition</p>
+                                        <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">4. Patient Disposition</p>
                                         <div className="flex flex-wrap gap-3">
                                             {['Improved','Recovered','Home/Discharged Against Medical Advise','Absconded','Expired','Transferred/Referred'].map(opt => (
                                                 <span key={opt} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase border ${data.disposition === opt ? 'bg-philhealth-green text-white border-philhealth-green' : 'bg-white text-slate-300 border-slate-200'}`}>
@@ -186,7 +186,7 @@ export default function ViewForm({ data, onClose }) {
                                         {/* Transferred/Referred */}
                                         {data.disposition === 'Transferred/Referred' && (
                                             <div className="space-y-4 pt-3 border-t border-slate-200 mt-2">
-                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Transferred / Referred To:</p>
+                                                <p className="text-[10px] font-black text-slate-900 uppercase tracking-wider">Transferred / Referred To:</p>
                                                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                                                     <ReadOnlyDisplay label="HCI Name"             value={data.transferred_hci_name} />
                                                     <ReadOnlyDisplay label="Building / Street"    value={data.transferred_street} />
@@ -201,7 +201,7 @@ export default function ViewForm({ data, onClose }) {
 
                                     {/* 5. Accommodation */}
                                     <div className="space-y-3 p-6 bg-slate-50 rounded-2xl border border-slate-100">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">5. Type of Accommodation</p>
+                                        <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">5. Type of Accommodation</p>
                                         <div className="flex gap-4">
                                             {['Private','Non-Private (Charity/Service)'].map(opt => (
                                                 <span key={opt} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase border ${data.accomodation_type === opt ? 'bg-philhealth-green text-white border-philhealth-green' : 'bg-white text-slate-300 border-slate-200'}`}>
@@ -213,13 +213,13 @@ export default function ViewForm({ data, onClose }) {
 
                                     {/* 6. Admission Diagnosis */}
                                     <div className="space-y-2">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">6. Admission Diagnosis/es</p>
+                                        <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">6. Admission Diagnosis/es</p>
                                         <ReadOnlyDisplay value={data.admission_diagnosis} isTextArea={true} />
                                     </div>
 
                                     {/* 7. Discharge Diagnosis  */}
                                     <div className="space-y-3">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">7. Discharge Diagnosis/es</p>
+                                        <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">7. Discharge Diagnosis/es</p>
                                         {!data.discharge_diagnoses || data.discharge_diagnoses.length === 0 ? (
                                             <div className="px-5 py-4 bg-slate-50/80 border border-slate-200/60 rounded-xl text-xs italic text-slate-300 font-normal">
                                                 Left Blank
@@ -254,7 +254,7 @@ export default function ViewForm({ data, onClose }) {
                                     {/* 8. Special Considerations */}
                                     {data.special_considerations && (
                                         <div className="space-y-4 p-6 bg-slate-50 rounded-2xl border border-slate-100">
-                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">8. Special Considerations</p>
+                                            <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">8. Special Considerations</p>
 
                                             {/* a. Repetitive Procedures */}
                                             {Object.keys(data.special_considerations.repetitive_procedures || {}).length > 0 && (
@@ -370,7 +370,7 @@ export default function ViewForm({ data, onClose }) {
                                     {/* 9. PhilHealth Benefits */}
                                     {(data.philhealth_benefits?.first_case_rate || data.philhealth_benefits?.second_case_rate) && (
                                         <div className="space-y-3 p-6 bg-slate-50 rounded-2xl border border-slate-100">
-                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">9. PhilHealth Benefits</p>
+                                            <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">9. PhilHealth Benefits</p>
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                 <ReadOnlyDisplay label="First Case Rate"  value={data.philhealth_benefits.first_case_rate} />
                                                 <ReadOnlyDisplay label="Second Case Rate" value={data.philhealth_benefits.second_case_rate} />
@@ -381,7 +381,7 @@ export default function ViewForm({ data, onClose }) {
                                     {/* 10. Accreditation / Professionals */}
                                     {(data.professionals || []).length > 0 && (
                                         <div className="space-y-3 p-6 bg-slate-50 rounded-2xl border border-slate-100">
-                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">10. Accreditation / Professional Fees</p>
+                                            <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">10. Accreditation / Professional Fees</p>
                                             <div className="space-y-3">
                                                 {data.professionals.map((prof, i) => (
                                                     <div key={i} className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-white rounded-xl border border-slate-200/60">
@@ -551,7 +551,7 @@ export default function ViewForm({ data, onClose }) {
                             {/* PART IV */}
                             {currentStep === 4 && (
                                 <div className="space-y-8">
-                                    <ReadOnlyDisplay label="Name of Authorized HCI Representative" value={data.hci_name} />
+                                    <ReadOnlyDisplay label="Name of Authorized HCI Representative" value={data.hci_representative_name} />
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                         <ReadOnlyDisplay label="Official Capacity/Designation" value={data.designation} />
                                         <ReadOnlyDisplay label="Date" value={data.date_signed} />

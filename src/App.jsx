@@ -167,7 +167,7 @@ export default function App() {
       const { data: part4Data, error: part4Error } = await supabase
           .from('Part4_Certification')
           .insert([{
-            hci_name:     data.hci_name,
+            hci_representative_name:     data.hci_representative_name,
             designation:  data.designation,
             date:         parseDate(data.date_signed),
             is_certified: data.finalCertification,
@@ -544,7 +544,7 @@ export default function App() {
           consentMedicalRecords:   part3.consent_medical_records || false,
           consentLiabilityFree:    part3.consent_liability_free || false,
 
-          hci_name:          part4.hci_representative_name || '',
+          hci_representative_name:          part4.hci_representative_name || '',
           designation:       part4.designation || '',
           date_signed:       part4.date || '',
           finalCertification: part4.is_certified || false,

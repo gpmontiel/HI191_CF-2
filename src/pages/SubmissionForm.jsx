@@ -271,180 +271,118 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
         setPatientResults([]);
         setPatientSelected(true);
 
-        // 1. Fetch discharge diagnoses
-        const { data: diagData, error: diagError } = await supabase
-            .from('discharge_diagnosis')
-            .select('*')
-            .eq('confinement_id', record.confinement_id);
-
-        // 2. Fetch philhealth benefits
-        const { data: philhealthData, error: phError } = await supabase
-            .from('philhealth_benefits')
-            .select('*')
-            .eq('confinement_id', record.confinement_id)
-            .maybeSingle();
-
-        const { data: profData, error: profError } = await supabase
-            .from('accreditation')
-            .select('*')
-            .eq('confinement_id', record.confinement_id);
-
-        let repData = [];
-        let biteData = [];
-        let mcpData = [];
-        let newbornRows = [];
-        let repError = null;
-
-        // 3. Fetch from all child sub-tables via consideration_id
-        if (considerationRow?.consideration_id) {
-            // Fetch Repetitive Procedures
-            const { data: rData, error: rErr } = await supabase
-                .from('repetitive_procedure')
+        try {
+            // 1. Fetch discharge diagnoses
+            const { data: diagData, error: diagError } = await supabase
+                .from('discharge_diagnosis')
                 .select('*')
-                .eq('consideration_id', considerationRow.consideration_id);
-            repData = rData || [];
-            repError = rErr;
+                .eq('confinement_id', record.confinement_id);
 
-            // Fetch Animal Bite Package rows
-            const { data: bData } = await supabase
-                .from('animal_bite_package')
+            // 2. Fetch philhealth benefits
+            const { data: philhealthData, error: phError } = await supabase
+                .from('philhealth_benefits')
                 .select('*')
-                .eq('consideration_id', considerationRow.consideration_id);
-            biteData = bData || [];
+                .eq('confinement_id', record.confinement_id)
+                .maybeSingle();
 
-            // Fetch MCP Package rows
-            const { data: mData } = await supabase
-                .from('mcp_package')
+            const { data: profData, error: profError } = await supabase
+                .from('accreditation')
                 .select('*')
-                .eq('consideration_id', considerationRow.consideration_id);
-            mcpData = mData || [];
+                .eq('confinement_id', record.confinement_id);
 
-            // NEW: Fetch Newborn Package row
-            const { data: nData } = await supabase
-                .from('newborn_package')
-                .select('*')
-                .eq('consideration_id', considerationRow.consideration_id);
-            mcpData = mData || [];
-            newbornRows = nData || []; // Change this to plural
+            // Safely declare variables to prevent crashes if sub-queries are skipped
+            let repData = [];
+            let biteData = [];
+            let mcpData = [];
+            let newbornRows = [];
+
+            // FIXED: Safely verify if record has a consideration identifier instead of using an missing reference
+            if (record?.consideration_id) {
+                const { data: rData } = await supabase
+                    .from('repetitive_procedure')
+                    .select('*')
+                    .eq('consideration_id', record.consideration_id);
+                repData = rData || [];
+
+                const { data: bData } = await supabase
+                    .from('animal_bite_package')
+                    .select('*')
+                    .eq('consideration_id', record.consideration_id);
+                biteData = bData || [];
+
+                const { data: mData } = await supabase
+                    .from('mcp_package')
+                    .select('*')
+                    .eq('consideration_id', record.consideration_id);
+                mcpData = mData || [];
+
+                const { data: nData } = await supabase
+                    .from('newborn_package')
+                    .select('*')
+                    .eq('consideration_id', record.consideration_id);
+                newbornRows = nData || [];
+            }
+
+            setFormData(prev => ({
+                ...prev,
+                confinement_id:           record.confinement_id,
+                patient_last_name:        record.last_name || '',
+                patient_first_name:       record.first_name || '',
+                patient_middle_name:      record.middle_name || '',
+                patient_name_extension:   record.name_extension || '',
+                is_referred:              record.is_referred,
+                name_referral:            record.name_referral || '',
+                building_street_referral: record.building_street_re || '',
+                city_referral:            record.city_referral || '',
+                province_referral:        record.province_referral || '',
+                zip_referral:             record.zip_referral || '',
+                date_time_admitted:       record.date_time_admitted || '',
+                date_time_discharged:     record.date_time_discharged || '',
+                disposition:              record.disposition || '',
+                accomodation_type:        record.accomodation_type || '',
+                discharge_diagnoses:      diagError ? [] : (diagData || []),
+                date_time_expiration:     record.date_time_expiration  || '',
+                transferred_hci_name:     record.transferred_hci_name  || '',
+                transferred_street:       record.transferred_street    || '',
+                transferred_city:         record.transferred_city      || '',
+                transferred_province:     record.transferred_province  || '',
+                transferred_zip:          record.transferred_zip       || '',
+                reason_referral:          record.reason_referral       || '',
+
+                special_considerations: {
+                    hemodialysis:        { checked: false, dates: [''] },
+                    blood_transfusion:   { checked: false, dates: [''] },
+                    peritoneal_dialysis: { checked: false, dates: [''] },
+                    brachytherapy:       { checked: false, dates: [''] },
+                    radiotherapy_linac:  { checked: false, dates: [''] },
+                    chemotherapy:        { checked: false, dates: [''] },
+                    radiotherapy_cobalt: { checked: false, dates: [''] },
+                    simple_debridement:  { checked: false, dates: [''] }
+                },
+                packages: {
+                    z_benefit_code: '',
+                    mcp_dates: ['', '', '', ''],
+                    tb_dots_intensive: false,
+                    tb_dots_maintenance: false,
+                    animal_bite: { day_0_arv: '', day_3_arv: '', day_7_arv: '', rig: '', others: '' },
+                    newborn: {
+                        is_essential: false, is_hearing_screening: false, is_screening: false,
+                        is_immediate_drying: false, is_early_skin: false, is_cord_clamping: false,
+                        is_eye_prophylaxis: false, is_weighing: false, is_vitamink: false,
+                        is_bcg: false, is_nonseparation: false, is_hepaB: false,
+                    },
+                    hiv_lab_number: '',
+                },
+                philhealth_benefits: {
+                    first_case_rate: philhealthData?.first_case_rate || '',
+                    second_case_rate: philhealthData?.second_case_rate || ''
+                },
+                professionals: []
+            }));
+        } catch (err) {
+            console.error("Error setting patient payload:", err);
+            setToast({ message: 'An unexpected processing error occurred.', type: 'error' });
         }
-
-        // Helper date formatter (converts YYYY-MM-DD to MM-DD-YYYY)
-        const formatDbDate = (dbDate) => {
-            if (!dbDate) return '';
-            const [year, month, day] = dbDate.split('-');
-            return `${month}-${day}-${year}`;
-        };
-
-        // Parser for Repetitive Procedures (Part a)
-        const getProcedureData = (procedureName) => {
-            if (repError || repData.length === 0) return { checked: false, dates: '' };
-            const matches = repData.filter(row => row.procedure?.toLowerCase().trim() === procedureName.toLowerCase().trim());
-            if (matches.length === 0) return { checked: false, dates: '' };
-            return {
-                checked: true,
-                dates: matches.map(row => formatDbDate(row.session_date)).filter(Boolean).join(', ')
-            };
-        };
-
-        // Parser for Animal Bite Vaccines (Part e)
-        const getVaccineDate = (vaccineType) => {
-            const match = biteData.find(row => row.vaccine_type?.toLowerCase().trim() === vaccineType.toLowerCase().trim());
-            return match ? formatDbDate(match.date) : '';
-        };
-
-        const getAnimalBiteOthers = () => {
-            const match = biteData.find(row => row.vaccine_type?.toLowerCase().trim() === 'others');
-            if (!match) return '';
-            return match.others_desc ? `${match.others_desc} (${formatDbDate(match.date)})` : formatDbDate(match.date);
-        };
-
-        // Parser for MCP Pre-natal checkup array mapping (Part c)
-        const getMcpDatesArray = () => {
-            const datesArray = ['', '', '', ''];
-            mcpData.forEach(row => {
-                const checkupNum = parseInt(row.checkup_no, 10);
-                if (checkupNum >= 1 && checkupNum <= 4) {
-                    datesArray[checkupNum - 1] = formatDbDate(row.checkup_date);
-                }
-            });
-            return datesArray;
-        };
-
-        setFormData(prev => ({
-            ...prev,
-            confinement_id:           record.confinement_id,
-            patient_last_name:        record.last_name || '',
-            patient_first_name:       record.first_name || '',
-            patient_middle_name:      record.middle_name || '',
-            patient_name_extension:   record.name_extension || '',
-            is_referred:              record.is_referred,
-            name_referral:            record.name_referral || '',
-            building_street_referral: record.building_street_re || '', 
-            city_referral:            record.city_referral || '',
-            province_referral:        record.province_referral || '',
-            zip_referral:             record.zip_referral || '',
-            date_time_admitted:       record.date_time_admitted || '', 
-            date_time_discharged:     record.date_time_discharged || '', 
-            disposition:              record.disposition || '',
-            accomodation_type:        record.accomodation_type || '', 
-            discharge_diagnoses:      diagError ? [] : (diagData || []),
-            date_time_expiration:     record.date_time_expiration  || '',
-            transferred_hci_name:     record.transferred_hci_name  || '',
-            transferred_street:       record.transferred_street    || '',
-            transferred_city:         record.transferred_city      || '',
-            transferred_province:     record.transferred_province  || '',
-            transferred_zip:          record.transferred_zip       || '',
-            reason_referral:          record.reason_referral       || '',
-
-            // Part a — always blank, user fills manually
-            special_considerations: {
-                hemodialysis:        { checked: false, dates: [''] },
-                blood_transfusion:   { checked: false, dates: [''] },
-                peritoneal_dialysis: { checked: false, dates: [''] },
-                brachytherapy:       { checked: false, dates: [''] },
-                radiotherapy_linac:  { checked: false, dates: [''] },
-                chemotherapy:        { checked: false, dates: [''] },
-                radiotherapy_cobalt: { checked: false, dates: [''] },
-                simple_debridement:  { checked: false, dates: [''] }
-            },
-
-            // Parts b to g — always blank, user fills manually
-            packages: {
-                z_benefit_code: '',
-                mcp_dates: ['', '', '', ''],
-                tb_dots_intensive: false,
-                tb_dots_maintenance: false,
-                animal_bite: {
-                    day_0_arv: '',
-                    day_3_arv: '',
-                    day_7_arv: '',
-                    rig:       '',
-                    others:    ''
-                },
-                newborn: {
-                    is_essential:         false,
-                    is_hearing_screening: false,
-                    is_screening:         false,
-                    is_immediate_drying:  false,
-                    is_early_skin:        false,
-                    is_cord_clamping:     false,
-                    is_eye_prophylaxis:   false,
-                    is_weighing:          false,
-                    is_vitamink:          false,
-                    is_bcg:               false,
-                    is_nonseparation:     false,
-                    is_hepaB:             false,
-                },
-                hiv_lab_number: '',
-            },
-
-            philhealth_benefits: {
-                first_case_rate: philhealthData?.first_case_rate || '',
-                second_case_rate: philhealthData?.second_case_rate || ''
-            },
-
-            professionals: []
-        }));
     };
 
     const addProfessionalRow = () => {
@@ -502,7 +440,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
             );
             return allRowsComplete;
         }
-        if (currentStep === 4) return formData.finalCertification && formData.hci_name;
+        if (currentStep === 4) return formData.finalCertification && formData.hci_representative_name;
         return true;
     };
 
@@ -1486,7 +1424,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                                     onChange={handleChange}
                                                                 />
                                                                 <FormInput
-                                                                    label="PhilHealth Benefit"
+                                                                    label="PhilHealth Benefit Amount"
                                                                     name="hciPhilhealthBenefit"
                                                                     type="number"
                                                                     value={formData.hciPhilhealthBenefit}
@@ -1577,7 +1515,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                                     onChange={handleChange}
                                                                 />
                                                                 <FormInput
-                                                                    label="PhilHealth Benefit"
+                                                                    label="PhilHealth Benefit Amount"
                                                                     name="pfPhilhealthBenefit"
                                                                     type="number"
                                                                     value={formData.pfPhilhealthBenefit}
