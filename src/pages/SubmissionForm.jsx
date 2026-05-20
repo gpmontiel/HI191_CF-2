@@ -609,7 +609,6 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                         name="certifiedEnough"
                                                         checked={formData.certifiedEnough}
                                                         onChange={handleChange}
-                                                        disabled={formData.consumedPrior}
                                                         className="w-6 h-6 rounded border-slate-300 text-philhealth-green focus:ring-philhealth-green cursor-pointer transition-all disabled:opacity-30"
                                                     />
                                                 </div>
@@ -669,7 +668,6 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                         name="consumedPrior"
                                                         checked={formData.consumedPrior}
                                                         onChange={handleChange}
-                                                        disabled={formData.certifiedEnough}
                                                         className="w-6 h-6 rounded border-slate-300 text-philhealth-green focus:ring-philhealth-green cursor-pointer transition-all disabled:opacity-30"
                                                     />
                                                 </div>

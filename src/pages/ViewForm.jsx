@@ -125,13 +125,13 @@ export default function ViewForm({ data, onClose }) {
                                             A. CERTIFICATION OF CONSUMPTION OF BENEFITS:
                                         </h3>
 
-                                        {data.certifiedEnough ? (
-                                            <div className="p-6 bg-amber-50 rounded-2xl border border-amber-100 space-y-6">
+                                        {/* 1. Show Option 1 layout if checked */}
+                                        {data.certifiedEnough && (
+                                            <div className="p-6 bg-amber-50 rounded-2xl border border-amber-100 space-y-6 mb-6">
                                                 <div className="space-y-1">
                                                     <div className="flex items-center gap-3 text-amber-800 font-bold text-xs uppercase tracking-wider">
                                                         ✓ PhilHealth benefit was enough to cover HCI and PF Charges.
                                                     </div>
-
                                                     <p className="text-[11px] text-amber-700">
                                                         No purchase of drugs/medicines, supplies, diagnostics, and co-pay for professional fees by the member/patient.
                                                     </p>
@@ -142,11 +142,13 @@ export default function ViewForm({ data, onClose }) {
                                                     <ReadOnlyDisplay label="Grand Total" value={grandTotalEnough} />
                                                 </div>
                                             </div>
-                                        ) : data.consumedPrior ? (
+                                        )}
+
+                                        {/* 2. Show Option 2 layout if checked */}
+                                        {data.consumedPrior && (
                                             <div className="p-6 bg-amber-50 rounded-2xl border border-amber-100 space-y-8">
                                                 <div className="text-amber-800 font-bold text-xs uppercase tracking-wider">
-                                                    ✓ The benefit of the member/patient was completely consumed prior to co-pay OR the benefit of the member/patient is not completely consumed BUT with
-                                                    purchases/expenses for drugs/medicines, supplies, diagnostics and others.
+                                                    ✓ The benefit of the member/patient was completely consumed prior to co-pay OR the benefit of the member/patient is not completely consumed BUT with purchases/expenses for drugs/medicines, supplies, diagnostics and others.
                                                 </div>
 
                                                 <div className="pt-4 border-t border-amber-200/50">
@@ -161,14 +163,12 @@ export default function ViewForm({ data, onClose }) {
                                                         <h4 className="text-[10px] font-black uppercase text-slate-900 tracking-wider">
                                                             1. Health Care Institution Fees
                                                         </h4>
-
                                                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                                             <ReadOnlyDisplay label="Actual Charges" value={data.hciActualCharges} />
                                                             <ReadOnlyDisplay label="After Discount" value={data.hciDiscount} />
                                                             <ReadOnlyDisplay label="PhilHealth Benefit" value={data.hciPhilhealthBenefit} />
                                                             <ReadOnlyDisplay label="Co-pay Amount" value={data.hciAfterDeductionAmount} />
                                                         </div>
-
                                                         <div className="text-[12px] font-bold text-slate-600">
                                                             Paid by: {[
                                                             data.hciDeductionPayers?.member && 'Member/Patient',
@@ -183,14 +183,12 @@ export default function ViewForm({ data, onClose }) {
                                                         <h4 className="text-[10px] font-black uppercase text-slate-800 tracking-wider">
                                                             2. Professional Fees
                                                         </h4>
-
                                                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                                             <ReadOnlyDisplay label="Actual Charges" value={data.pfActualCharges} />
                                                             <ReadOnlyDisplay label="After Discount" value={data.pfDiscount} />
                                                             <ReadOnlyDisplay label="PhilHealth Benefit" value={data.pfPhilhealthBenefit} />
                                                             <ReadOnlyDisplay label="Co-pay Amount" value={data.pfAfterDeductionAmount} />
                                                         </div>
-
                                                         <div className="text-[12px] font-bold text-slate-600">
                                                             Paid by: {[
                                                             data.pfDeductionPayers?.member && 'Member/Patient',
@@ -208,13 +206,11 @@ export default function ViewForm({ data, onClose }) {
                                                             Purchases/Expenses Not Included in HCI Charges
                                                         </h4>
                                                     </div>
-
                                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                         <ReadOnlyDisplay
                                                             label="Total Cost of Purchased Medicines & Supplies"
                                                             value={data.drugsCostType === 'amount' ? data.drugsAmount : 'None'}
                                                         />
-
                                                         <ReadOnlyDisplay
                                                             label="Total Diagnostic & Laboratory Costs"
                                                             value={data.diagnosticCostType === 'amount' ? data.diagnosticAmount : 'None'}
@@ -222,7 +218,10 @@ export default function ViewForm({ data, onClose }) {
                                                     </div>
                                                 </div>
                                             </div>
-                                        ) : (
+                                        )}
+
+                                        {/* 3. Fallback text if neither is checked */}
+                                        {!data.certifiedEnough && !data.consumedPrior && (
                                             <p className="text-xs text-slate-400 italic">No structural benefit configurations declared.</p>
                                         )}
                                     </section>
