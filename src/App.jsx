@@ -318,43 +318,58 @@ export default function App() {
 
       // ---- Update confinement_info with all editable Part II fields ----
       // Clone a new confinement row for this submission
-      if (data.confinement_id) {
-        const { data: origConf } = await supabase
-            .from('confinement_info')
-            .select('patient_id')
-            .eq('confinement_id', data.confinement_id)
-            .single();
+        // ---- Update confinement_info with all editable Part II fields ----
 
-        const { data: newConf, error: newConfErr } = await supabase
-            .from('confinement_info')
-            .insert([{
-              patient_id:               origConf.patient_id,
-              admission_diagnosis:      data.admission_diagnosis || null,
-              is_referred:              data.is_referred ?? null,
-              name_referral:            data.name_referral || null,
-              building_street_referral: data.building_street_referral || null,
-              city_referral:            data.city_referral || null,
-              province_referral:        data.province_referral || null,
-              zip_referral:             data.zip_referral || null,
-              disposition:              data.disposition || null,
-              accomodation_type:        data.accomodation_type || null,
-              date_time_admitted:       data.date_admitted ? `${data.date_admitted}T${data.time_admitted || '00:00'}:00` : null,
-              date_time_discharged:     data.date_discharged ? `${data.date_discharged}T${data.time_discharged || '00:00'}:00` : null,
-              date_time_expiration:     data.disposition === 'Expired' && data.date_expiration ? `${data.date_expiration}T${data.time_expiration || '00:00'}:00` : null,
-              transferred_hci_name:     data.disposition === 'Transferred/Referred' ? (data.transferred_hci_name || null) : null,
-              transferred_street:       data.disposition === 'Transferred/Referred' ? (data.transferred_street || null) : null,
-              transferred_city:         data.disposition === 'Transferred/Referred' ? (data.transferred_city || null) : null,
-              transferred_province:     data.disposition === 'Transferred/Referred' ? (data.transferred_province || null) : null,
-              transferred_zip:          data.disposition === 'Transferred/Referred' ? (data.transferred_zip || null) : null,
-              reason_referral:          data.disposition === 'Transferred/Referred' ? (data.reason_referral || null) : null,
-            }])
-            .select()
-            .single();
-        if (newConfErr) throw newConfErr;
+        // 1. Determine the Patient ID
+        let currentPatientId = data.patient_id; // Use direct patient_id if the form passes it
 
-        // Use the NEW confinement_id for the rest of the submit
-        data.confinement_id = newConf.confinement_id;
-      }
+        // If we don't have a direct patient_id, but we DO have an old confinement_id, fetch it
+        if (!currentPatientId && data.confinement_id) {
+            const { data: origConf } = await supabase
+                .from('confinement_info')
+                .select('patient_id')
+                .eq('confinement_id', data.confinement_id)
+                .single();
+
+            if (origConf) currentPatientId = origConf.patient_id;
+        }
+
+        // 2. Insert the new confinement row AS LONG AS we have a patient to attach it to
+        if (currentPatientId) {
+            const { data: newConf, error: newConfErr } = await supabase
+                .from('confinement_info')
+                .insert([{
+                    patient_id:               currentPatientId,
+                    admission_diagnosis:      data.admission_diagnosis || null,
+                    is_referred:              data.is_referred ?? null,
+                    name_referral:            data.name_referral || null,
+                    building_street_referral: data.building_street_referral || null,
+                    city_referral:            data.city_referral || null,
+                    province_referral:        data.province_referral || null,
+                    zip_referral:             data.zip_referral || null,
+                    disposition:              data.disposition || null,
+                    accomodation_type:        data.accomodation_type || null,
+                    date_time_admitted:       data.date_admitted ? `${data.date_admitted}T${data.time_admitted || '00:00'}:00` : null,
+                    date_time_discharged:     data.date_discharged ? `${data.date_discharged}T${data.time_discharged || '00:00'}:00` : null,
+                    date_time_expiration:     data.disposition === 'Expired' && data.date_expiration ? `${data.date_expiration}T${data.time_expiration || '00:00'}:00` : null,
+                    transferred_hci_name:     data.disposition === 'Transferred/Referred' ? (data.transferred_hci_name || null) : null,
+                    transferred_street:       data.disposition === 'Transferred/Referred' ? (data.transferred_street || null) : null,
+                    transferred_city:         data.disposition === 'Transferred/Referred' ? (data.transferred_city || null) : null,
+                    transferred_province:     data.disposition === 'Transferred/Referred' ? (data.transferred_province || null) : null,
+                    transferred_zip:          data.disposition === 'Transferred/Referred' ? (data.transferred_zip || null) : null,
+                    reason_referral:          data.disposition === 'Transferred/Referred' ? (data.reason_referral || null) : null,
+                }])
+                .select()
+                .single();
+
+            if (newConfErr) throw newConfErr;
+
+            // OVERRIDE the old confinement_id with the newly created one so the rest of the inserts link correctly
+            data.confinement_id = newConf.confinement_id;
+        } else {
+            // Failsafe so it doesn't fail silently anymore
+            throw new Error("Cannot create confinement record: No Patient ID could be found or determined.");
+        }
 
       // ---- Upsert philhealth_benefits ----
       if (data.confinement_id && (data.philhealth_benefits?.first_case_rate || data.philhealth_benefits?.second_case_rate)) {
@@ -746,26 +761,58 @@ export default function App() {
                           Start New Form
                         </button>
                       </div>
-                      <div className="bg-philhealth-green rounded-2xl p-6 text-white shadow-xl">
-                        <h3 className="text-philhealth-yellow text-[10px] font-bold uppercase mb-6 tracking-widest">
-                          Submission Summary
-                        </h3>
-                        <div className="space-y-6">
-                          <div>
-                            <div className="flex justify-between">
-                              <span className="text-xs opacity-70">Active Reviews</span>
-                              <span className="text-2xl font-bold">{String(stats.pending).padStart(2, '0')}</span>
+                        <div className="bg-philhealth-green rounded-2xl p-6 text-white shadow-xl">
+                            <h3 className="text-philhealth-yellow text-[10px] font-bold uppercase mb-6 tracking-widest">
+                                Submission Summary
+                            </h3>
+
+                            <div className="space-y-6">
+                                {/* Pending / Active Reviews */}
+                                <div>
+                                    <div className="flex justify-between items-end mb-1.5">
+                                        <span className="text-xs opacity-70">Active Reviews</span>
+                                        <span className="text-2xl font-bold leading-none">{String(stats.pending).padStart(2, '0')}</span>
+                                    </div>
+                                    <div className="h-1.5 bg-emerald-950/40 rounded-full overflow-hidden">
+                                        <motion.div
+                                            initial={{ width: 0 }}
+                                            animate={{ width: `${forms.length ? (stats.pending / forms.length) * 100 : 0}%` }}
+                                            className="h-full bg-philhealth-yellow"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Approved */}
+                                <div>
+                                    <div className="flex justify-between items-end mb-1.5">
+                                        <span className="text-xs opacity-70">Approved</span>
+                                        <span className="text-2xl font-bold leading-none">{String(stats.approved).padStart(2, '0')}</span>
+                                    </div>
+                                    <div className="h-1.5 bg-emerald-950/40 rounded-full overflow-hidden">
+                                        <motion.div
+                                            initial={{ width: 0 }}
+                                            animate={{ width: `${forms.length ? (stats.approved / forms.length) * 100 : 0}%` }}
+                                            className="h-full bg-emerald-400"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Rejected */}
+                                <div>
+                                    <div className="flex justify-between items-end mb-1.5">
+                                        <span className="text-xs opacity-70">Rejected</span>
+                                        <span className="text-2xl font-bold leading-none">{String(stats.rejected).padStart(2, '0')}</span>
+                                    </div>
+                                    <div className="h-1.5 bg-emerald-950/40 rounded-full overflow-hidden">
+                                        <motion.div
+                                            initial={{ width: 0 }}
+                                            animate={{ width: `${forms.length ? (stats.rejected / forms.length) * 100 : 0}%` }}
+                                            className="h-full bg-rose-400"
+                                        />
+                                    </div>
+                                </div>
                             </div>
-                            <div className="h-1.5 bg-emerald-950/40 rounded-full overflow-hidden">
-                              <motion.div
-                                  initial={{ width: 0 }}
-                                  animate={{ width: `${forms.length ? (stats.pending / forms.length) * 100 : 0}%` }}
-                                  className="h-full bg-philhealth-yellow"
-                              />
-                            </div>
-                          </div>
                         </div>
-                      </div>
                     </aside>
                 )}
 

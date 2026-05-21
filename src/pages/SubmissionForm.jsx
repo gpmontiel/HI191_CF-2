@@ -61,6 +61,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
         hci_address_province: '',
 
         // Part II - Patient Confinement - Section A
+        patient_id: '',
         confinement_id: '',
         patient_last_name: '',
         patient_first_name: '',
@@ -256,18 +257,18 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
 
     // Part II - fetching from database happens here
     const handlePatientSearch = async (query) => {
+        console.log('\n--- [DEBUG Patient Search] STARTED ---');
+        console.log('[DEBUG Patient Search] 1. Initial Query:', query);
+
         setPatientQuery(query);
         setPatientSelected(false);
-        if (query.length < 2) { setPatientResults([]); return; }
+        if (query.length < 2) {
+            console.log('[DEBUG Patient Search] Query too short, clearing results.');
+            setPatientResults([]);
+            return;
+        }
 
         setPatientSearching(true);
-        // Search patient_info for names, then join to confinement_info
-        const { data, error } = await supabase
-            .from('confinement_info')
-            .select('*, patient_info(*)')
-            .eq('patient_info.last_name', undefined) // we need ilike, so:
-        // Actually, better approach — search patient_info first, then confinements:
-
         const { data: patients, error: patientError } = await supabase
             .from('patient_info')
             .select('*')
@@ -275,60 +276,96 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
             .order('last_name', { ascending: true })
             .limit(10);
 
+        console.log('[DEBUG Patient Search] 2. Raw Patients from DB:', patients);
+        if (patientError) console.error('[DEBUG Patient Search] ERROR fetching patients:', patientError);
+
         if (patientError) {
-            setToast({ message: 'Could not search patients.', type: 'error' });
+            setToast({ message: `Could not search patients: ${patientError.message}`, type: 'error' });
             setPatientSearching(false);
             return;
         }
 
-        // For each patient, fetch their confinements
-        if (patients && patients.length > 0) {
-            const patientIds = patients.map(p => p.patient_id);
-            const { data: confinements, error: confError } = await supabase
-                .from('confinement_info')
-                .select('*')
-                .in('patient_id', patientIds)
-                .order('confinement_id', { ascending: false });
-
-            if (confError) {
-                setToast({ message: 'Could not fetch confinement records.', type: 'error' });
-            } else {
-                // Attach patient name info to each confinement
-                const results = (confinements || []).map(c => {
-                    const patient = patients.find(p => p.patient_id === c.patient_id);
-                    return {
-                        ...c,
-                        last_name: patient?.last_name || '',
-                        first_name: patient?.first_name || '',
-                        middle_name: patient?.middle_name || '',
-                        name_extension: patient?.name_extension || '',
-                    };
-                });
-                setPatientResults(results);
-            }
-        } else {
+        if (!patients || patients.length === 0) {
+            console.log('[DEBUG Patient Search] No patients found matching query. Exiting early.');
             setPatientResults([]);
+            setPatientSearching(false);
+            return;
+        }
+
+        // Fetch confinements for matched patients
+        const patientIds = patients.map(p => p.patient_id);
+        console.log('[DEBUG Patient Search] 3. Extracted Patient IDs for confinement lookup:', patientIds);
+
+        const { data: confinements, error: confError } = await supabase
+            .from('confinement_info')
+            .select('*')
+            .in('patient_id', patientIds)
+            .order('confinement_id', { ascending: false });
+
+        console.log('[DEBUG Patient Search] 4. Raw Confinements from DB:', confinements);
+        if (confError) console.error('[DEBUG Patient Search] ERROR fetching confinements:', confError);
+
+        if (confError) {
+            setToast({ message: `Could not fetch confinement records: ${confError.message}`, type: 'error' });
+            setPatientSearching(false);
+            return;
+        }
+
+        if (!confinements || confinements.length === 0) {
+            console.log('[DEBUG Patient Search] 5. No confinements found. Mapping default patient structures.');
+            // Patients found but no confinement records — still show them so they can be selected
+            const results = patients.map(p => ({
+                confinement_id: null,
+                patient_id: p.patient_id,
+                last_name: p.last_name || '',
+                first_name: p.first_name || '',
+                middle_name: p.middle_name || '',
+                name_extension: p.name_extension || '',
+            }));
+            console.log('[DEBUG Patient Search] 6. Final mapped results (NO CONFINEMENTS):', results);
+            setPatientResults(results);
+        } else {
+            console.log('[DEBUG Patient Search] 5. Confinements found. Merging patient names into confinement rows.');
+            // Attach patient name info to each confinement row
+            const results = confinements.map(c => {
+                const patient = patients.find(p => p.patient_id === c.patient_id);
+                console.log(`[DEBUG Patient Search]   -> Mapping confinement ${c.confinement_id} to patient:`, patient);
+                return {
+                    ...c,
+                    last_name: patient?.last_name || '',
+                    first_name: patient?.first_name || '',
+                    middle_name: patient?.middle_name || '',
+                    name_extension: patient?.name_extension || '',
+                };
+            });
+            console.log('[DEBUG Patient Search] 6. Final mapped results (WITH CONFINEMENTS):', results);
+            setPatientResults(results);
         }
         setPatientSearching(false);
+        console.log('--- [DEBUG Patient Search] FINISHED ---\n');
     };
 
     const handlePatientSelect = async (record) => {
-        setPatientQuery(`${record.last_name}, ${record.first_name} ${record.middle_name || ''}`.trim());
+        console.log('\n--- [DEBUG Patient Select] STARTED ---');
+        console.log('[DEBUG Patient Select] Record selected by user:', record);
+
+        // Let's verify what string is actually being built for the query input
+        const fullNameStr = `${record.last_name}, ${record.first_name} ${record.middle_name || ''}`.trim();
+        console.log('[DEBUG Patient Select] String setting to patientQuery:', fullNameStr);
+
+        setPatientQuery(fullNameStr);
         setPatientResults([]);
         setPatientSelected(true);
 
         try {
-            // 1. Fetch philhealth benefits
-            const { data: philhealthData, error: phError } = await supabase
+            // 1. Fetch philhealth benefits (linked by confinement_id)
+            const { data: philhealthData } = await supabase
                 .from('philhealth_benefits')
                 .select('*')
                 .eq('confinement_id', record.confinement_id)
                 .maybeSingle();
 
-            const { data: profData, error: profError } = await supabase
-                .from('accreditation')
-                .select('*')
-                .eq('confinement_id', record.confinement_id);
+            console.log('[DEBUG Patient Select] philhealthData fetched:', philhealthData);
 
             // Safely declare variables to prevent crashes if sub-queries are skipped
             let repData = [];
@@ -336,35 +373,48 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
             let mcpData = [];
             let newbornRows = [];
 
-            // FIXED: Safely verify if record has a consideration identifier instead of using an missing reference
-            if (record?.consideration_id) {
+            // special_consideration is linked by confinement_id — look it up that way
+            const { data: scRow } = await supabase
+                .from('special_consideration')
+                .select('consideration_id')
+                .eq('confinement_id', record.confinement_id)
+                .order('consideration_id', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            console.log('[DEBUG Patient Select] special_consideration fetched:', scRow);
+
+            if (scRow?.consideration_id) {
                 const { data: rData } = await supabase
                     .from('repetitive_procedure')
                     .select('*')
-                    .eq('consideration_id', record.consideration_id);
+                    .eq('consideration_id', scRow.consideration_id);
                 repData = rData || [];
 
                 const { data: bData } = await supabase
                     .from('animal_bite_package')
                     .select('*')
-                    .eq('consideration_id', record.consideration_id);
+                    .eq('consideration_id', scRow.consideration_id);
                 biteData = bData || [];
 
                 const { data: mData } = await supabase
                     .from('mcp_package')
                     .select('*')
-                    .eq('consideration_id', record.consideration_id);
+                    .eq('consideration_id', scRow.consideration_id);
                 mcpData = mData || [];
 
                 const { data: nData } = await supabase
                     .from('newborn_package')
                     .select('*')
-                    .eq('consideration_id', record.consideration_id);
+                    .eq('consideration_id', scRow.consideration_id);
                 newbornRows = nData || [];
             }
 
+            console.log('[DEBUG Patient Select] Updating formData with payload built from selected record...');
+
             setFormData(prev => ({
                 ...prev,
+                patient_id:               record.patient_id,
                 confinement_id:           record.confinement_id,
                 patient_last_name:        record.last_name || '',
                 patient_first_name:       record.first_name || '',
@@ -428,6 +478,8 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                 },
                 professionals: []
             }));
+
+            console.log('--- [DEBUG Patient Select] FINISHED ---\n');
         } catch (err) {
             console.error("Error setting patient payload:", err);
             setToast({ message: 'An unexpected processing error occurred.', type: 'error' });
@@ -464,7 +516,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
     };
     // STEPPER AREA
     const nextStep = () => {
-        if (currentStep === 2 && !formData.confinement_id) {
+        if (currentStep === 2 && !formData.patient_last_name) {
             setToast({ message: 'Patient Name is required. You may continue, but please remember to fill them before submitting.', type: 'warning' });
             setCurrentStep((prev) => Math.min(prev + 1, 4));
             return;
