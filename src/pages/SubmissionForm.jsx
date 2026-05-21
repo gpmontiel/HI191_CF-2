@@ -24,6 +24,11 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
     const [patientSelected, setPatientSelected] = React.useState(false);
 
     const [showConfirmModal, setShowConfirmModal] = React.useState(false);
+    const [hciQuery, setHciQuery] = React.useState('');
+    const [hciFiltered, setHciFiltered] = React.useState([]);
+    const [hciSelected, setHciSelected] = React.useState(false);
+
+    const [submitting, setSubmitting] = React.useState(false);
 
     // Fetching for Part I
     React.useEffect(() => {
@@ -69,6 +74,12 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
         zip_referral: '',
         date_time_admitted: '',
         date_time_discharged: '',
+        date_admitted: '',
+        time_admitted: '',
+        date_discharged: '',
+        time_discharged: '',
+        date_expiration: '',
+        time_expiration: '',
         disposition: '',
         accomodation_type: '',
         admission_diagnosis: '',    // free text
@@ -247,24 +258,56 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
     const handlePatientSearch = async (query) => {
         setPatientQuery(query);
         setPatientSelected(false);
-
-        if (query.length < 2) {
-            setPatientResults([]);
-            return;
-        }
+        if (query.length < 2) { setPatientResults([]); return; }
 
         setPatientSearching(true);
+        // Search patient_info for names, then join to confinement_info
         const { data, error } = await supabase
             .from('confinement_info')
+            .select('*, patient_info(*)')
+            .eq('patient_info.last_name', undefined) // we need ilike, so:
+        // Actually, better approach — search patient_info first, then confinements:
+
+        const { data: patients, error: patientError } = await supabase
+            .from('patient_info')
             .select('*')
-            .ilike('last_name', `${query}%`)   // starts-with search, case-insensitive
+            .ilike('last_name', `${query}%`)
             .order('last_name', { ascending: true })
             .limit(10);
 
-        if (error) {
+        if (patientError) {
             setToast({ message: 'Could not search patients.', type: 'error' });
+            setPatientSearching(false);
+            return;
+        }
+
+        // For each patient, fetch their confinements
+        if (patients && patients.length > 0) {
+            const patientIds = patients.map(p => p.patient_id);
+            const { data: confinements, error: confError } = await supabase
+                .from('confinement_info')
+                .select('*')
+                .in('patient_id', patientIds)
+                .order('confinement_id', { ascending: false });
+
+            if (confError) {
+                setToast({ message: 'Could not fetch confinement records.', type: 'error' });
+            } else {
+                // Attach patient name info to each confinement
+                const results = (confinements || []).map(c => {
+                    const patient = patients.find(p => p.patient_id === c.patient_id);
+                    return {
+                        ...c,
+                        last_name: patient?.last_name || '',
+                        first_name: patient?.first_name || '',
+                        middle_name: patient?.middle_name || '',
+                        name_extension: patient?.name_extension || '',
+                    };
+                });
+                setPatientResults(results);
+            }
         } else {
-            setPatientResults(data || []);
+            setPatientResults([]);
         }
         setPatientSearching(false);
     };
@@ -327,24 +370,33 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                 patient_first_name:       record.first_name || '',
                 patient_middle_name:      record.middle_name || '',
                 patient_name_extension:   record.name_extension || '',
-                is_referred:              record.is_referred,
-                name_referral:            record.name_referral || '',
-                building_street_referral: record.building_street_re || '',
-                city_referral:            record.city_referral || '',
-                province_referral:        record.province_referral || '',
-                zip_referral:             record.zip_referral || '',
-                date_time_admitted:       record.date_time_admitted || '',
-                date_time_discharged:     record.date_time_discharged || '',
-                disposition:              record.disposition || '',
-                accomodation_type:        record.accomodation_type || '',
+
+                // Start fresh for editable fields
+                is_referred:              null,
+                name_referral:            '',
+                building_street_referral: '',
+                city_referral:            '',
+                province_referral:        '',
+                zip_referral:             '',
+                date_time_admitted:       '',
+                date_time_discharged:     '',
+                date_admitted:            '',
+                time_admitted:            '',
+                date_discharged:          '',
+                time_discharged:          '',
+                disposition:              '',
+                accomodation_type:        '',
+                admission_diagnosis:      '',
                 discharge_diagnoses:      [],
-                date_time_expiration:     record.date_time_expiration  || '',
-                transferred_hci_name:     record.transferred_hci_name  || '',
-                transferred_street:       record.transferred_street    || '',
-                transferred_city:         record.transferred_city      || '',
-                transferred_province:     record.transferred_province  || '',
-                transferred_zip:          record.transferred_zip       || '',
-                reason_referral:          record.reason_referral       || '',
+                date_time_expiration:     '',
+                date_expiration:          '',
+                time_expiration:          '',
+                transferred_hci_name:     '',
+                transferred_street:       '',
+                transferred_city:         '',
+                transferred_province:     '',
+                transferred_zip:          '',
+                reason_referral:          '',
 
                 special_considerations: {
                     hemodialysis:        { checked: false, dates: [''] },
@@ -371,8 +423,8 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                     hiv_lab_number: '',
                 },
                 philhealth_benefits: {
-                    first_case_rate: philhealthData?.first_case_rate || '',
-                    second_case_rate: philhealthData?.second_case_rate || ''
+                    first_case_rate:  '',
+                    second_case_rate:  ''
                 },
                 professionals: []
             }));
@@ -580,8 +632,8 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                             {/* ---------------- PART I HERE ---------------- */}
                             {currentStep === 1 && (
                                 <div className="space-y-8">
-                                    {/* HCI Name Dropdown */}
-                                    <div className="space-y-2">
+                                    {/* HCI Name Search */}
+                                    <div className="space-y-2 relative">
                                         <label className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">
                                             Name of Health Care Institution
                                         </label>
@@ -590,56 +642,69 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                 Loading institutions...
                                             </div>
                                         ) : (
-                                            <select
-                                                value={formData.hci_id}
-                                                onChange={(e) => handleHCISelect(e.target.value)}
-                                                className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-philhealth-green/20 outline-none transition-all"
-                                            >
-                                                <option value="">— Select a Health Care Institution —</option>
-                                                {hciList.map((hci) => (
-                                                    <option key={hci.hci_id} value={hci.hci_id}>
-                                                        {hci.hci_name}
-                                                    </option>
-                                                ))}
-                                            </select>
+                                            <>
+                                                <input
+                                                    type="text"
+                                                    value={hciQuery}
+                                                    onChange={(e) => {
+                                                        const q = e.target.value;
+                                                        setHciQuery(q);
+                                                        setHciSelected(false);
+                                                        if (q.length < 2) {
+                                                            setHciFiltered([]);
+                                                        } else {
+                                                            const filtered = hciList.filter(h =>
+                                                                h.hci_name?.toLowerCase().includes(q.toLowerCase())
+                                                            );
+                                                            setHciFiltered(filtered.slice(0, 10));
+                                                        }
+                                                    }}
+                                                    placeholder="Type institution name to search..."
+                                                    className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-philhealth-green/20 outline-none transition-all"
+                                                />
+
+                                                {/* Search results dropdown */}
+                                                {hciFiltered.length > 0 && !hciSelected && (
+                                                    <motion.div
+                                                        initial={{ opacity: 0, y: -4 }}
+                                                        animate={{ opacity: 1, y: 0 }}
+                                                        className="absolute z-20 w-full bg-white border border-slate-200 rounded-xl shadow-xl overflow-y-auto max-h-60 mt-1"
+                                                    >
+                                                        {hciFiltered.map((hci) => (
+                                                            <button
+                                                                key={hci.hci_id}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setHciQuery(hci.hci_name);
+                                                                    setHciFiltered([]);
+                                                                    setHciSelected(true);
+                                                                    handleHCISelect(hci.hci_id);
+                                                                }}
+                                                                className="w-full text-left px-5 py-3 text-xs font-bold hover:bg-emerald-50 hover:text-philhealth-green transition-colors border-b border-slate-100 last:border-0"
+                                                            >
+                                                                {hci.hci_name}
+                                                                <span className="text-[10px] text-slate-400 ml-2">
+                                        — {hci.hci_address_city || ''}{hci.hci_address_province ? `, ${hci.hci_address_province}` : ''}
+                                    </span>
+                                                            </button>
+                                                        ))}
+                                                    </motion.div>
+                                                )}
+                                            </>
                                         )}
                                     </div>
 
                                     {/* Auto-filled fields — shown only after selection */}
-                                    {formData.hci_id && (
+                                    {formData.hci_id && hciSelected && (
                                         <motion.div
                                             initial={{ opacity: 0, y: -8 }}
                                             animate={{ opacity: 1, y: 0 }}
                                             className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 bg-emerald-50/50 rounded-2xl border border-emerald-100"
                                         >
-                                            <FormInput
-                                                label="PhilHealth Accreditation Number (PAN)"
-                                                name="pan_number"
-                                                value={formData.pan_number}
-                                                onChange={() => {}}
-                                                disabled={true}
-                                            />
-                                            <FormInput
-                                                label="Street Address"
-                                                name="hci_address_street"
-                                                value={formData.hci_address_street}
-                                                onChange={() => {}}
-                                                disabled={true}
-                                            />
-                                            <FormInput
-                                                label="City / Municipality"
-                                                name="hci_address_city"
-                                                value={formData.hci_address_city}
-                                                onChange={() => {}}
-                                                disabled={true}
-                                            />
-                                            <FormInput
-                                                label="Province / Region"
-                                                name="hci_address_province"
-                                                value={formData.hci_address_province}
-                                                onChange={() => {}}
-                                                disabled={true}
-                                            />
+                                            <FormInput label="PhilHealth Accreditation Number (PAN)" name="pan_number" value={formData.pan_number} onChange={() => {}} disabled={true} />
+                                            <FormInput label="Street Address" name="hci_address_street" value={formData.hci_address_street} onChange={() => {}} disabled={true} />
+                                            <FormInput label="City / Municipality" name="hci_address_city" value={formData.hci_address_city} onChange={() => {}} disabled={true} />
+                                            <FormInput label="Province / Region" name="hci_address_province" value={formData.hci_address_province} onChange={() => {}} disabled={true} />
                                         </motion.div>
                                     )}
                                 </div>
@@ -667,7 +732,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                             <motion.div
                                                 initial={{ opacity: 0, y: -4 }}
                                                 animate={{ opacity: 1, y: 0 }}
-                                                className="absolute z-20 w-full bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden mt-1"
+                                                className="absolute z-20 w-full bg-white border border-slate-200 rounded-xl shadow-xl overflow-y-auto max-h-60 mt-1"
                                             >
                                                 {patientSearching && (
                                                     <div className="px-5 py-3 text-xs text-slate-400 italic">Searching...</div>
@@ -702,93 +767,89 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                             </div>
 
                                             {/* 2. Was patient referred? */}
+                                            {/* 2. Was patient referred? */}
                                             <div className="space-y-4 p-6 bg-slate-50 rounded-2xl border border-slate-100">
                                                 <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">
-                                                    2. Was patient referred by another Health Care Institution (HCI)?
+                                                    2. Was patient referred by another Health Care Institution (HCI)? <span className="text-red-500">*</span>
                                                 </p>
                                                 <div className="flex gap-6">
-                                                    <span className={`px-4 py-2 rounded-lg text-xs font-black uppercase border ${formData.is_referred === false ? 'bg-philhealth-green text-white border-philhealth-green' : 'bg-white text-slate-400 border-slate-200'}`}>No</span>
-                                                    <span className={`px-4 py-2 rounded-lg text-xs font-black uppercase border ${formData.is_referred === true  ? 'bg-philhealth-green text-white border-philhealth-green' : 'bg-white text-slate-400 border-slate-200'}`}>Yes</span>
+                                                    <button type="button" onClick={() => setFormData(prev => ({ ...prev, is_referred: false }))}
+                                                            className={`px-4 py-2 rounded-lg text-xs font-black uppercase border transition-all ${formData.is_referred === false ? 'bg-philhealth-green text-white border-philhealth-green' : 'bg-white text-slate-400 border-slate-200 hover:border-philhealth-green/30'}`}>No</button>
+                                                    <button type="button" onClick={() => setFormData(prev => ({ ...prev, is_referred: true }))}
+                                                            className={`px-4 py-2 rounded-lg text-xs font-black uppercase border transition-all ${formData.is_referred === true ? 'bg-philhealth-green text-white border-philhealth-green' : 'bg-white text-slate-400 border-slate-200 hover:border-philhealth-green/30'}`}>Yes</button>
                                                 </div>
                                                 {formData.is_referred && (
                                                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4 pt-2">
-                                                        <FormInput label="Name of Referring HCI"    name="name_referral"           value={formData.name_referral}           onChange={() => {}} disabled />
-                                                        <FormInput label="Building / Street"         name="building_street_referral" value={formData.building_street_referral} onChange={() => {}} disabled />
-                                                        <FormInput label="City / Municipality"       name="city_referral"           value={formData.city_referral}           onChange={() => {}} disabled />
-                                                        <FormInput label="Province"                  name="province_referral"       value={formData.province_referral}       onChange={() => {}} disabled />
-                                                        <FormInput label="Zip Code"                  name="zip_referral"            value={formData.zip_referral}            onChange={() => {}} disabled />
+                                                        <FormInput label="Name of Referring HCI"  name="name_referral"            value={formData.name_referral}            onChange={handleChange} />
+                                                        <FormInput label="Building / Street"       name="building_street_referral" value={formData.building_street_referral} onChange={handleChange} />
+                                                        <FormInput label="City / Municipality"     name="city_referral"            value={formData.city_referral}            onChange={handleChange} />
+                                                        <FormInput label="Province"                name="province_referral"        value={formData.province_referral}        onChange={handleChange} />
+                                                        <FormInput label="Zip Code"                name="zip_referral"             value={formData.zip_referral}             onChange={handleChange} />
                                                     </div>
                                                 )}
                                             </div>
 
                                             {/* 3. Confinement Period */}
                                             <div className="space-y-3 p-6 bg-slate-50 rounded-2xl border border-slate-100">
-                                                <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">3. Confinement Period</p>
+                                                <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">3. Confinement Period <span className="text-red-500">*</span></p>
                                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                                    <FormInput label="Date Admitted"     name="date_admitted"  value={formatDate(formData.date_time_admitted)}   onChange={() => {}} disabled />
-                                                    <FormInput label="Time Admitted"     name="time_admitted"  value={formatTime(formData.date_time_admitted)}   onChange={() => {}} disabled />
-                                                    <FormInput label="Date Discharged"   name="date_discharged" value={formatDate(formData.date_time_discharged)} onChange={() => {}} disabled />
-                                                    <FormInput label="Time Discharged"   name="time_discharged" value={formatTime(formData.date_time_discharged)} onChange={() => {}} disabled />
+                                                    <FormInput label="Date Admitted"   name="date_admitted"   type="date" value={formData.date_admitted}   onChange={handleChange} />
+                                                    <FormInput label="Time Admitted"   name="time_admitted"   type="time" value={formData.time_admitted}   onChange={handleChange} />
+                                                    <FormInput label="Date Discharged" name="date_discharged" type="date" value={formData.date_discharged} onChange={handleChange} />
+                                                    <FormInput label="Time Discharged" name="time_discharged" type="time" value={formData.time_discharged} onChange={handleChange} />
                                                 </div>
                                             </div>
 
                                             {/* 4. Patient Disposition */}
+                                            {/* 4. Patient Disposition */}
                                             <div className="space-y-3 p-6 bg-slate-50 rounded-2xl border border-slate-100">
-                                                <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">4. Patient Disposition</p>
+                                                <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">4. Patient Disposition <span className="text-red-500">*</span></p>
                                                 <div className="flex flex-wrap gap-3">
                                                     {['Improved','Recovered','Home/Discharged Against Medical Advise','Absconded','Expired','Transferred/Referred'].map(opt => (
-                                                        <span key={opt} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase border ${formData.disposition === opt ? 'bg-philhealth-green text-white border-philhealth-green' : 'bg-white text-slate-300 border-slate-200'}`}>
+                                                        <button key={opt} type="button"
+                                                                onClick={() => setFormData(prev => ({ ...prev, disposition: opt }))}
+                                                                className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase border transition-all ${formData.disposition === opt ? 'bg-philhealth-green text-white border-philhealth-green' : 'bg-white text-slate-300 border-slate-200 hover:border-philhealth-green/30 hover:text-slate-500'}`}>
                                                             {opt}
-                                                        </span>
+                                                        </button>
                                                     ))}
                                                 </div>
 
-                                                {/* Expired — show date and time of expiration */}
                                                 {formData.disposition === 'Expired' && (
                                                     <div className="grid grid-cols-2 gap-4 pt-3 border-t border-slate-200 mt-2">
-                                                        <FormInput
-                                                            label="Date of Expiration"
-                                                            value={formData.date_time_expiration
-                                                                ? new Date(formData.date_time_expiration).toLocaleDateString('en-PH', { month:'2-digit', day:'2-digit', year:'2-digit' })
-                                                                : ''}
-                                                            onChange={() => {}}
-                                                            disabled
-                                                        />
-                                                        <FormInput
-                                                            label="Time of Expiration"
-                                                            value={formData.date_time_expiration
-                                                                ? new Date(formData.date_time_expiration).toLocaleTimeString('en-PH', { hour:'numeric', minute:'2-digit', hour12: true })
-                                                                : ''}
-                                                            onChange={() => {}}
-                                                            disabled
-                                                        />
+                                                        <FormInput label="Date of Expiration" name="date_expiration" type="date"
+                                                                   value={formData.date_expiration || (formData.date_time_expiration ? formData.date_time_expiration.slice(0, 10) : '')}
+                                                                   onChange={handleChange} />
+                                                        <FormInput label="Time of Expiration" name="time_expiration" type="time"
+                                                                   value={formData.time_expiration || (formData.date_time_expiration ? formData.date_time_expiration.slice(11, 16) : '')}
+                                                                   onChange={handleChange} />
                                                     </div>
                                                 )}
 
-                                                {/* Transferred/Referred — show destination HCI details */}
                                                 {formData.disposition === 'Transferred/Referred' && (
                                                     <div className="space-y-4 pt-3 border-t border-slate-200 mt-2">
                                                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Transferred / Referred To:</p>
                                                         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                                            <FormInput label="HCI Name"          value={formData.transferred_hci_name}   onChange={() => {}} disabled />
-                                                            <FormInput label="Building / Street" value={formData.transferred_street}     onChange={() => {}} disabled />
-                                                            <FormInput label="City / Municipality" value={formData.transferred_city}     onChange={() => {}} disabled />
-                                                            <FormInput label="Province"          value={formData.transferred_province}   onChange={() => {}} disabled />
-                                                            <FormInput label="Zip Code"          value={formData.transferred_zip}        onChange={() => {}} disabled />
+                                                            <FormInput label="HCI Name"            name="transferred_hci_name" value={formData.transferred_hci_name} onChange={handleChange} />
+                                                            <FormInput label="Building / Street"   name="transferred_street"   value={formData.transferred_street}   onChange={handleChange} />
+                                                            <FormInput label="City / Municipality" name="transferred_city"     value={formData.transferred_city}     onChange={handleChange} />
+                                                            <FormInput label="Province"            name="transferred_province" value={formData.transferred_province} onChange={handleChange} />
+                                                            <FormInput label="Zip Code"            name="transferred_zip"      value={formData.transferred_zip}      onChange={handleChange} />
                                                         </div>
-                                                        <FormInput label="Reason for Referral / Transfer" value={formData.reason_referral} onChange={() => {}} disabled />
+                                                        <FormInput label="Reason for Referral / Transfer" name="reason_referral" value={formData.reason_referral} onChange={handleChange} />
                                                     </div>
                                                 )}
                                             </div>
 
                                             {/* 5. Type of Accommodation */}
                                             <div className="space-y-3 p-6 bg-slate-50 rounded-2xl border border-slate-100">
-                                                <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">5. Type of Accommodation</p>
+                                                <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">5. Type of Accommodation <span className="text-red-500">*</span></p>
                                                 <div className="flex gap-4">
                                                     {['Private','Non-Private (Charity/Service)'].map(opt => (
-                                                        <span key={opt} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase border ${formData.accomodation_type === opt ? 'bg-philhealth-green text-white border-philhealth-green' : 'bg-white text-slate-300 border-slate-200'}`}>
+                                                        <button key={opt} type="button"
+                                                                onClick={() => setFormData(prev => ({ ...prev, accomodation_type: opt }))}
+                                                                className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase border transition-all ${formData.accomodation_type === opt ? 'bg-philhealth-green text-white border-philhealth-green' : 'bg-white text-slate-300 border-slate-200 hover:border-philhealth-green/30 hover:text-slate-500'}`}>
                                                             {opt}
-                                                        </span>
+                                                        </button>
                                                     ))}
                                                 </div>
                                             </div>
@@ -1246,19 +1307,22 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                             {/* --- 9. PhilHealth Benefits Section --- */}
                                             <div className="space-y-3 p-6 bg-slate-50 rounded-2xl border border-slate-100">
                                                 <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">9. PhilHealth Benefits</p>
-
                                                 <div className="p-6 bg-slate-50/50 grid grid-cols-1 md:grid-cols-2 gap-6">
                                                     <FormInput
                                                         label="First Case Rate"
                                                         value={formData.philhealth_benefits?.first_case_rate || ''}
-                                                        onChange={() => {}}
-                                                        disabled
+                                                        onChange={(e) => setFormData(prev => ({
+                                                            ...prev,
+                                                            philhealth_benefits: { ...prev.philhealth_benefits, first_case_rate: e.target.value }
+                                                        }))}
                                                     />
                                                     <FormInput
                                                         label="Second Case Rate"
                                                         value={formData.philhealth_benefits?.second_case_rate || ''}
-                                                        onChange={() => {}}
-                                                        disabled
+                                                        onChange={(e) => setFormData(prev => ({
+                                                            ...prev,
+                                                            philhealth_benefits: { ...prev.philhealth_benefits, second_case_rate: e.target.value }
+                                                        }))}
                                                     />
                                                 </div>
                                             </div>
@@ -1389,11 +1453,6 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                     placeholder="Auto-computed"
                                                 />
                                             </div>
-                                            {formData.certifiedEnough && (
-                                                <p className="text-[10px] text-red-400 font-bold pt-1">
-                                                    ⚠ Please ensure all fee fields are filled in to support your claim approval.
-                                                </p>
-                                            )}
                                         </div>
 
                                         <div className="flex items-center gap-4 py-2">
@@ -1685,9 +1744,6 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                             </div>
                                                         </div>
                                                     </div>
-                                                    <p className="text-[10px] text-red-400 font-bold pt-2">
-                                                        ⚠ Please ensure all co-pay and purchase fields are completely filled in to support your claim approval.
-                                                    </p>
                                                 </motion.div>
                                             )}
                                         </div>
@@ -1828,7 +1884,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                     {/* Row 2: Designation and Date side-by-side */}
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                         <FormInput
-                                            label={<>"Official Capacity/Designation" <span className="text-red-500">*</span></>}
+                                            label={<>Official Capacity/Designation <span className="text-red-500">*</span></>}
                                             name="designation"
                                             value={formData.designation}
                                             onChange={handleChange}
@@ -1942,9 +1998,11 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                     Cancel
                                 </button>
                                 <button
-                                    onClick={() => {
+                                    onClick={async () => {
                                         setShowConfirmModal(false);
-                                        onSubmit({ ...formData, grandTotalEnough });
+                                        setSubmitting(true);
+                                        await onSubmit({ ...formData, grandTotalEnough });
+                                        setSubmitting(false);
                                     }}
                                     className="flex-1 px-5 py-3 rounded-xl bg-philhealth-yellow text-philhealth-green text-xs font-black uppercase tracking-widest hover:opacity-90 active:scale-95 transition-all shadow-lg"
                                 >
@@ -1953,6 +2011,20 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                             </div>
                         </div>
                     </motion.div>
+                </div>,
+                document.body
+            )}
+            {submitting && ReactDOM.createPortal(
+                <div className="fixed inset-0 z-[9997] flex items-center justify-center bg-white/60 backdrop-blur-sm">
+                    <div className="flex flex-col items-center gap-4">
+                        <div className="w-12 h-12 border-4 border-philhealth-green/20 border-t-philhealth-green rounded-full animate-spin" />
+                        <p className="text-sm font-black text-philhealth-green uppercase tracking-widest animate-pulse">
+                            Submitting...
+                        </p>
+                        <p className="text-[10px] text-slate-400 font-medium">
+                            Please wait while we save your claim form.
+                        </p>
+                    </div>
                 </div>,
                 document.body
             )}

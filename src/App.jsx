@@ -43,15 +43,16 @@ export default function App() {
                 date_submitted,
                 status,
                 confinement_info (
-                    last_name,
-                    first_name,
-                    middle_name,
-                    name_extension
+                    patient_info (
+                        last_name,
+                        first_name,
+                        middle_name,
+                        name_extension
+                    )
                 )
             `)
           .order('date_submitted', { ascending: false });
 
-      // PhilHealth sees everything; clinicians only see their own
       if (!isPhilHealth) {
         query = query.eq('user_id', userId);
       }
@@ -60,7 +61,7 @@ export default function App() {
       if (error) throw error;
 
       const formattedForms = (data || []).map((form) => {
-        const patient = form.confinement_info;
+        const patient = form.confinement_info?.patient_info;
         const fullName = patient
             ? [patient.first_name, patient.middle_name, patient.last_name, patient.name_extension]
                 .filter(Boolean).join(' ')
@@ -315,16 +316,57 @@ export default function App() {
         if (nbError) throw nbError;
       }
 
-      // ---- CLAIMFORMS2 master record ----
-        // ---- Update admission_diagnosis on the existing confinement_info row ----
-        if (data.confinement_id && data.admission_diagnosis) {
-            const { error: confinementError } = await supabase
-                .from('confinement_info')
-                .update({ admission_diagnosis: data.admission_diagnosis })
-                .eq('confinement_id', data.confinement_id);
+      // ---- Update confinement_info with all editable Part II fields ----
+      // Clone a new confinement row for this submission
+      if (data.confinement_id) {
+        const { data: origConf } = await supabase
+            .from('confinement_info')
+            .select('patient_id')
+            .eq('confinement_id', data.confinement_id)
+            .single();
 
-            if (confinementError) throw confinementError;
-        }
+        const { data: newConf, error: newConfErr } = await supabase
+            .from('confinement_info')
+            .insert([{
+              patient_id:               origConf.patient_id,
+              admission_diagnosis:      data.admission_diagnosis || null,
+              is_referred:              data.is_referred ?? null,
+              name_referral:            data.name_referral || null,
+              building_street_referral: data.building_street_referral || null,
+              city_referral:            data.city_referral || null,
+              province_referral:        data.province_referral || null,
+              zip_referral:             data.zip_referral || null,
+              disposition:              data.disposition || null,
+              accomodation_type:        data.accomodation_type || null,
+              date_time_admitted:       data.date_admitted ? `${data.date_admitted}T${data.time_admitted || '00:00'}:00` : null,
+              date_time_discharged:     data.date_discharged ? `${data.date_discharged}T${data.time_discharged || '00:00'}:00` : null,
+              date_time_expiration:     data.disposition === 'Expired' && data.date_expiration ? `${data.date_expiration}T${data.time_expiration || '00:00'}:00` : null,
+              transferred_hci_name:     data.disposition === 'Transferred/Referred' ? (data.transferred_hci_name || null) : null,
+              transferred_street:       data.disposition === 'Transferred/Referred' ? (data.transferred_street || null) : null,
+              transferred_city:         data.disposition === 'Transferred/Referred' ? (data.transferred_city || null) : null,
+              transferred_province:     data.disposition === 'Transferred/Referred' ? (data.transferred_province || null) : null,
+              transferred_zip:          data.disposition === 'Transferred/Referred' ? (data.transferred_zip || null) : null,
+              reason_referral:          data.disposition === 'Transferred/Referred' ? (data.reason_referral || null) : null,
+            }])
+            .select()
+            .single();
+        if (newConfErr) throw newConfErr;
+
+        // Use the NEW confinement_id for the rest of the submit
+        data.confinement_id = newConf.confinement_id;
+      }
+
+      // ---- Upsert philhealth_benefits ----
+      if (data.confinement_id && (data.philhealth_benefits?.first_case_rate || data.philhealth_benefits?.second_case_rate)) {
+        const { error: phError } = await supabase
+            .from('philhealth_benefits')
+            .upsert({
+              confinement_id: data.confinement_id,
+              first_case_rate: data.philhealth_benefits.first_case_rate || null,
+              second_case_rate: data.philhealth_benefits.second_case_rate || null,
+            }, { onConflict: 'confinement_id' });
+        if (phError) throw phError;
+      }
 
       // ---- ClaimForms2 master record — ties everything together ----
       const { data: cf2Data, error: cf2Error } = await supabase
@@ -358,7 +400,7 @@ export default function App() {
       // Update local state so dashboard reflects the new row immediately
       setForms(prev => [{
         id:              cf2Data.cf2_id,
-        patient_name:    `${data.patient_first_name} ${data.patient_last_name}`.trim(),
+        patient_name: `${data.patient_first_name} ${data.patient_last_name}`.trim(),
         status:          'Pending',
         submission_date: new Date().toISOString().split('T')[0],
       }, ...prev]);
@@ -421,6 +463,13 @@ export default function App() {
 
       if (data) {
         const patient = data.confinement_info || {};
+        // Fetch patient name from patient_info
+        const { data: patientData } = await supabase
+            .from('patient_info')
+            .select('*')
+            .eq('patient_id', patient.patient_id)
+            .maybeSingle();
+
         const part3 = data.Part3_Consumption_Consent || {};
         const part4 = data.Part4_Certification || {};
 
@@ -507,13 +556,13 @@ export default function App() {
           hci_address_city:     data.hci_info?.hci_address_city || '',
           hci_address_province: data.hci_info?.hci_address_province || '',
 
-          patient_last_name:        patient.last_name || '',
-          patient_first_name:       patient.first_name || '',
-          patient_middle_name:      patient.middle_name || '',
-          patient_name_extension:   patient.name_extension || '',
+          patient_last_name:        patientData?.last_name || '',
+          patient_first_name:       patientData?.first_name || '',
+          patient_middle_name:      patientData?.middle_name || '',
+          patient_name_extension:   patientData?.name_extension || '',
           is_referred:              patient.is_referred,
           name_referral:            patient.name_referral || '',
-          building_street_referral: patient.building_street_re || '',
+          building_street_referral: patient.building_street_referral || '',
           city_referral:            patient.city_referral || '',
           province_referral:        patient.province_referral || '',
           zip_referral:             patient.zip_referral || '',
