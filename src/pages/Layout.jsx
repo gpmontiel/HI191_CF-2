@@ -1,15 +1,17 @@
 import 'react';
 import { LogOut } from 'lucide-react';
 
-export default function Layout({ children, userEmail, onLogout }) {
+export default function Layout({ children, userEmail, onLogout, isPhilHealth }) {
     return (
         <div className="min-h-screen flex flex-col bg-[#f0f4f0] font-sans text-slate-800">
             {/* Top Navigation Bar */}
             <header className="flex items-center justify-between px-8 py-4 bg-philhealth-green shadow-md sticky top-0 z-50">
                 <div className="flex items-center gap-3">
-                    <div className="w-12 h-10 bg-philhealth-yellow rounded-lg flex items-center justify-center font-bold text-philhealth-green text-xl shadow-lg shadow-black/10">
-                        CF2
-                    </div>
+                    <img
+                        src="/philhealth-logo.png"
+                        alt="PhilHealth Logo"
+                        className="w-12 h-10 object-contain"
+                    />
 
                     <div>
                         <h1 className="text-white font-bold text-lg leading-tight">
@@ -28,7 +30,7 @@ export default function Layout({ children, userEmail, onLogout }) {
                             href="#"
                             className="border-b-2 border-philhealth-yellow pb-1"
                         >
-                            Dashboard
+                            {isPhilHealth ? 'PhilHealth Dashboard' : 'Physician Dashboard'}
                         </a>
                     </nav>
 

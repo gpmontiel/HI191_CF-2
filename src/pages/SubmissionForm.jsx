@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { User, Stethoscope, ClipboardList, CheckSquare, ArrowLeft, Save, ArrowRight } from 'lucide-react';
 import { supabase } from "../lib/supabase.js";
 import Toast from '../pages/Toast.jsx';
+import ReactDOM from 'react-dom';
 
 const STEPS = [
     { id: 1, title: 'Health Care Institution (HCI) Information', icon: <Stethoscope size={20} /> },
@@ -22,15 +23,22 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
     const [patientSearching, setPatientSearching] = React.useState(false);
     const [patientSelected, setPatientSelected] = React.useState(false);
 
+    const [showConfirmModal, setShowConfirmModal] = React.useState(false);
+    const [hciQuery, setHciQuery] = React.useState('');
+    const [hciFiltered, setHciFiltered] = React.useState([]);
+    const [hciSelected, setHciSelected] = React.useState(false);
+
+    const [submitting, setSubmitting] = React.useState(false);
+
     // Fetching for Part I
     React.useEffect(() => {
         const fetchHCI = async () => {
             const { data, error } = await supabase
                 .from('hci_info')
-                .select('*') // SELECT ALL na lang muna
+                .select('*')
                 .order('hci_name', { ascending: true });
 
-            console.log('HCI columns:', data?.[0]); // this shows exact column names
+            console.log('HCI columns:', data?.[0]);
 
             if (error) {
                 setToast({ message: 'Could not load HCI list from database.', type: 'error' });
@@ -47,12 +55,12 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
         // Part I - HCI
         hci_id: '',
         pan_number: '',
-        // may hci_name na sa part IV
         hci_address_street: '',
         hci_address_city: '',
         hci_address_province: '',
 
         // Part II - Patient Confinement - Section A
+        patient_id: '',
         confinement_id: '',
         patient_last_name: '',
         patient_first_name: '',
@@ -66,14 +74,74 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
         zip_referral: '',
         date_time_admitted: '',
         date_time_discharged: '',
+        date_admitted: '',
+        time_admitted: '',
+        date_discharged: '',
+        time_discharged: '',
+        date_expiration: '',
+        time_expiration: '',
         disposition: '',
         accomodation_type: '',
-        admission_diagnosis: '',    // free text
+        admission_diagnosis: '',
+        date_time_expiration: '',
+        transferred_hci_name: '',
+        transferred_street: '',
+        transferred_city: '',
+        transferred_province: '',
+        transferred_zip: '',
+        reason_referral: '',
 
         // Discharge Diagnosis rows (from discharge_diagnosis table, linked by confinement_id)
-        discharge_diagnoses: [],    // array of objects from DB
+        discharge_diagnoses: [],
+        
+        // array of objects from DB
+        special_considerations: {
+            hemodialysis: { checked: false, dates: [''] },
+            blood_transfusion: { checked: false, dates: [''] },
+            peritoneal_dialysis: { checked: false, dates: [''] },
+            brachytherapy: { checked: false, dates: [''] },
+            radiotherapy_linac: { checked: false, dates: [''] },
+            chemotherapy: { checked: false, dates: [''] },
+            radiotherapy_cobalt: { checked: false, dates: [''] },
+            simple_debridement: { checked: false, dates: [''] }
+        },
 
-        // ---------------- !!!!! DON'T CHANGE THE PART BELOW !!!!! ---------------- //
+        packages: {
+            z_benefit_code: '',
+            mcp_dates: ['', '', '', ''],
+            tb_dots_intensive: false,
+            tb_dots_maintenance: false,
+            animal_bite: {
+                day_0_arv: '',
+                day_3_arv: '',
+                day_7_arv: '',
+                rig: '',
+                others: ''
+            },
+            newborn: {
+                is_essential: false,
+                is_hearing_screening: false,
+                is_screening: false,
+                is_immediate_drying: false,
+                is_early_skin: false,
+                is_cord_clamping: false,
+                is_eye_prophylaxis: false,
+                is_weighing: false,
+                is_vitamink: false,
+                is_bcg: false,
+                is_nonseparation: false,
+                is_hepaB: false,
+            },
+            hiv_lab_number: '',
+        },
+
+        philhealth_benefits: {
+            first_case_rate: '',
+            second_case_rate: ''
+        },
+
+        professionals: [],
+
         // Part III - Section A
         certifiedEnough: false,
         hciFeesEnough: '',
@@ -111,11 +179,10 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
         consentLiabilityFree: false,
 
         // Part IV
-        hci_name: '',
+        hci_representative_name: '',
         designation: '',
         date_signed: '',
         finalCertification: false,
-        // ---------------- !!!!! DON'T CHANGE THE PART ABOVE !!!!! ---------------- //
     });
 
     const grandTotalEnough = formData.certifiedEnough
@@ -184,71 +251,296 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
         }));
     };
 
-    // Part II - fetching from database happens here
+    // Part II - fetching from database
     const handlePatientSearch = async (query) => {
+        console.log('\n--- [DEBUG Patient Search] STARTED ---');
+        console.log('[DEBUG Patient Search] 1. Initial Query:', query);
+
         setPatientQuery(query);
         setPatientSelected(false);
-
         if (query.length < 2) {
+            console.log('[DEBUG Patient Search] Query too short, clearing results.');
             setPatientResults([]);
             return;
         }
 
         setPatientSearching(true);
-        const { data, error } = await supabase
-            .from('confinement_info')
+        const { data: patients, error: patientError } = await supabase
+            .from('patient_info')
             .select('*')
-            .ilike('last_name', `${query}%`)   // starts-with search, case-insensitive
+            .ilike('last_name', `${query}%`)
             .order('last_name', { ascending: true })
             .limit(10);
 
-        if (error) {
-            setToast({ message: 'Could not search patients.', type: 'error' });
+        console.log('[DEBUG Patient Search] 2. Raw Patients from DB:', patients);
+        if (patientError) console.error('[DEBUG Patient Search] ERROR fetching patients:', patientError);
+
+        if (patientError) {
+            setToast({ message: `Could not search patients: ${patientError.message}`, type: 'error' });
+            setPatientSearching(false);
+            return;
+        }
+
+        if (!patients || patients.length === 0) {
+            console.log('[DEBUG Patient Search] No patients found matching query. Exiting early.');
+            setPatientResults([]);
+            setPatientSearching(false);
+            return;
+        }
+
+        // Fetch confinements for matched patients
+        const patientIds = patients.map(p => p.patient_id);
+        console.log('[DEBUG Patient Search] 3. Extracted Patient IDs for confinement lookup:', patientIds);
+
+        const { data: confinements, error: confError } = await supabase
+            .from('confinement_info')
+            .select('*')
+            .in('patient_id', patientIds)
+            .order('confinement_id', { ascending: false });
+
+        console.log('[DEBUG Patient Search] 4. Raw Confinements from DB:', confinements);
+        if (confError) console.error('[DEBUG Patient Search] ERROR fetching confinements:', confError);
+
+        if (confError) {
+            setToast({ message: `Could not fetch confinement records: ${confError.message}`, type: 'error' });
+            setPatientSearching(false);
+            return;
+        }
+
+        if (!confinements || confinements.length === 0) {
+            console.log('[DEBUG Patient Search] 5. No confinements found. Mapping default patient structures.');
+            const results = patients.map(p => ({
+                confinement_id: null,
+                patient_id: p.patient_id,
+                last_name: p.last_name || '',
+                first_name: p.first_name || '',
+                middle_name: p.middle_name || '',
+                name_extension: p.name_extension || '',
+            }));
+            console.log('[DEBUG Patient Search] 6. Final mapped results (NO CONFINEMENTS):', results);
+            setPatientResults(results);
         } else {
-            setPatientResults(data || []);
+            console.log('[DEBUG Patient Search] 5. Confinements found. Merging patient names into confinement rows.');
+            // Attach patient name info to each confinement row
+            const results = confinements.map(c => {
+                const patient = patients.find(p => p.patient_id === c.patient_id);
+                console.log(`[DEBUG Patient Search]   -> Mapping confinement ${c.confinement_id} to patient:`, patient);
+                return {
+                    ...c,
+                    last_name: patient?.last_name || '',
+                    first_name: patient?.first_name || '',
+                    middle_name: patient?.middle_name || '',
+                    name_extension: patient?.name_extension || '',
+                };
+            });
+            console.log('[DEBUG Patient Search] 6. Final mapped results (WITH CONFINEMENTS):', results);
+            setPatientResults(results);
         }
         setPatientSearching(false);
+        console.log('--- [DEBUG Patient Search] FINISHED ---\n');
     };
 
     const handlePatientSelect = async (record) => {
-        setPatientQuery(`${record.last_name}, ${record.first_name} ${record.middle_name || ''}`.trim());
+        console.log('\n--- [DEBUG Patient Select] STARTED ---');
+        console.log('[DEBUG Patient Select] Record selected by user:', record);
+
+        const fullNameStr = `${record.last_name}, ${record.first_name} ${record.middle_name || ''}`.trim();
+        console.log('[DEBUG Patient Select] String setting to patientQuery:', fullNameStr);
+
+        setPatientQuery(fullNameStr);
         setPatientResults([]);
         setPatientSelected(true);
 
-        // Also fetch their discharge diagnoses
-        const { data: diagData, error: diagError } = await supabase
-            .from('discharge_diagnosis')
-            .select('*')
-            .eq('confinement_id', record.confinement_id);
+        try {
+            const { data: philhealthData } = await supabase
+                .from('philhealth_benefits')
+                .select('*')
+                .eq('confinement_id', record.confinement_id)
+                .maybeSingle();
 
-        setFormData(prev => ({
-            ...prev,
-            confinement_id:          record.confinement_id,
-            patient_last_name:       record.last_name || '',
-            patient_first_name:      record.first_name || '',
-            patient_middle_name:     record.middle_name || '',
-            patient_name_extension:  record.name_extension || '',
-            is_referred:             record.is_referred,
-            name_referral:           record.name_referral || '',
-            building_street_referral: record.building_street_re || '', // truncated col name
-            city_referral:           record.city_referral || '',
-            province_referral:       record.province_referral || '',
-            zip_referral:            record.zip_referral || '',
-            date_time_admitted:      record.date_time_admitted || '', // truncated col name
-            date_time_discharged:    record.date_time_discharged || '', // truncated col name
-            disposition:             record.disposition || '',
-            accomodation_type:       record.accomodation_type || '', // truncated col name
-            discharge_diagnoses:     diagError ? [] : (diagData || []),
-        }));
+            console.log('[DEBUG Patient Select] philhealthData fetched:', philhealthData);
+
+            let repData = [];
+            let biteData = [];
+            let mcpData = [];
+            let newbornRows = [];
+
+            const { data: scRow } = await supabase
+                .from('special_consideration')
+                .select('consideration_id')
+                .eq('confinement_id', record.confinement_id)
+                .order('consideration_id', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            console.log('[DEBUG Patient Select] special_consideration fetched:', scRow);
+
+            if (scRow?.consideration_id) {
+                const { data: rData } = await supabase
+                    .from('repetitive_procedure')
+                    .select('*')
+                    .eq('consideration_id', scRow.consideration_id);
+                repData = rData || [];
+
+                const { data: bData } = await supabase
+                    .from('animal_bite_package')
+                    .select('*')
+                    .eq('consideration_id', scRow.consideration_id);
+                biteData = bData || [];
+
+                const { data: mData } = await supabase
+                    .from('mcp_package')
+                    .select('*')
+                    .eq('consideration_id', scRow.consideration_id);
+                mcpData = mData || [];
+
+                const { data: nData } = await supabase
+                    .from('newborn_package')
+                    .select('*')
+                    .eq('consideration_id', scRow.consideration_id);
+                newbornRows = nData || [];
+            }
+
+            console.log('[DEBUG Patient Select] Updating formData with payload built from selected record...');
+
+            setFormData(prev => ({
+                ...prev,
+                patient_id:               record.patient_id,
+                confinement_id:           record.confinement_id,
+                patient_last_name:        record.last_name || '',
+                patient_first_name:       record.first_name || '',
+                patient_middle_name:      record.middle_name || '',
+                patient_name_extension:   record.name_extension || '',
+
+                is_referred:              null,
+                name_referral:            '',
+                building_street_referral: '',
+                city_referral:            '',
+                province_referral:        '',
+                zip_referral:             '',
+                date_time_admitted:       '',
+                date_time_discharged:     '',
+                date_admitted:            '',
+                time_admitted:            '',
+                date_discharged:          '',
+                time_discharged:          '',
+                disposition:              '',
+                accomodation_type:        '',
+                admission_diagnosis:      '',
+                discharge_diagnoses:      [],
+                date_time_expiration:     '',
+                date_expiration:          '',
+                time_expiration:          '',
+                transferred_hci_name:     '',
+                transferred_street:       '',
+                transferred_city:         '',
+                transferred_province:     '',
+                transferred_zip:          '',
+                reason_referral:          '',
+
+                special_considerations: {
+                    hemodialysis:        { checked: false, dates: [''] },
+                    blood_transfusion:   { checked: false, dates: [''] },
+                    peritoneal_dialysis: { checked: false, dates: [''] },
+                    brachytherapy:       { checked: false, dates: [''] },
+                    radiotherapy_linac:  { checked: false, dates: [''] },
+                    chemotherapy:        { checked: false, dates: [''] },
+                    radiotherapy_cobalt: { checked: false, dates: [''] },
+                    simple_debridement:  { checked: false, dates: [''] }
+                },
+                packages: {
+                    z_benefit_code: '',
+                    mcp_dates: ['', '', '', ''],
+                    tb_dots_intensive: false,
+                    tb_dots_maintenance: false,
+                    animal_bite: { day_0_arv: '', day_3_arv: '', day_7_arv: '', rig: '', others: '' },
+                    newborn: {
+                        is_essential: false, is_hearing_screening: false, is_screening: false,
+                        is_immediate_drying: false, is_early_skin: false, is_cord_clamping: false,
+                        is_eye_prophylaxis: false, is_weighing: false, is_vitamink: false,
+                        is_bcg: false, is_nonseparation: false, is_hepaB: false,
+                    },
+                    hiv_lab_number: '',
+                },
+                philhealth_benefits: {
+                    first_case_rate:  '',
+                    second_case_rate:  ''
+                },
+                professionals: []
+            }));
+
+            console.log('--- [DEBUG Patient Select] FINISHED ---\n');
+        } catch (err) {
+            console.error("Error setting patient payload:", err);
+            setToast({ message: 'An unexpected processing error occurred.', type: 'error' });
+        }
     };
 
+    const addProfessionalRow = () => {
+        const today = new Date().toISOString().split('T')[0];
+        setFormData(prev => ({
+            ...prev,
+            professionals: [
+                ...prev.professionals, 
+                { accreditation_number: '', name: '', date: today, is_copay: false, copay_amount: '' }
+            ]
+        }));
+    };
+    
+    const handleProfessionalChange = (index, field, value) => {
+        setFormData(prev => {
+            const updatedProfessionals = [...prev.professionals];
+            updatedProfessionals[index] = { 
+                ...updatedProfessionals[index], 
+                [field]: value 
+            };
+            return { ...prev, professionals: updatedProfessionals };
+        });
+    };
+
+    const removeProfessionalRow = (index) => {
+        setFormData(prev => ({
+            ...prev,
+            professionals: prev.professionals.filter((_, i) => i !== index)
+        }));
+    };
     // STEPPER AREA
     const nextStep = () => {
+        if (currentStep === 2 && !formData.patient_last_name) {
+            setToast({ message: 'Patient Name is required. You may continue, but please remember to fill them before submitting.', type: 'warning' });
+            setCurrentStep((prev) => Math.min(prev + 1, 4));
+            return;
+        }
+        if (currentStep === 2 && !formData.admission_diagnosis?.trim()) {
+            setToast({ message: 'Section 6 (Admission Diagnosis) is required. You may continue, but please remember to fill them before submitting.', type: 'warning' });
+            setCurrentStep((prev) => Math.min(prev + 1, 4));
+            return;
+        }
+        if (currentStep === 2 && formData.discharge_diagnoses.some(d =>
+            !d.diagnosis?.trim() || !d.icd_code?.trim() || !d.related_procedure?.trim() ||
+            !d.rvs_code?.trim() || !d.procedure_date?.trim() || !d.laterality?.trim()
+        )) {
+            setToast({ message: 'Some fields in Section 7 (Discharge Diagnoses) are incomplete. All row fields must have a value.', type: 'warning' });
+            setCurrentStep((prev) => Math.min(prev + 1, 4));
+            return;
+        }
+        if (currentStep === 2 && formData.professionals.length === 0) {
+            setToast({ message: 'Section 10 (Accreditation) has no professionals added. You may continue, but please remember to fill them before submitting.', type: 'warning' });
+            setCurrentStep((prev) => Math.min(prev + 1, 4));
+            return;
+        }
+        if (currentStep === 3 && !formData.certifiedEnough && !formData.consumedPrior) {
+            setToast({ message: 'Please select at least one option in Section A. You may continue, but please remember to fill them before submitting.', type: 'warning' });
+            setCurrentStep((prev) => Math.min(prev + 1, 4));
+            return;
+        }
+        if (currentStep === 3 && (!formData.representativeName?.trim() || !formData.representativeDateSigned || !formData.consentMedicalRecords || !formData.consentLiabilityFree)) {
+            setToast({ message: 'Section B (Consent) has incomplete required fields. You may continue, but please remember to fill them before submitting.', type: 'warning' });
+            setCurrentStep((prev) => Math.min(prev + 1, 4));
+            return;
+        }
         if (!isStepValid()) {
-            setToast({
-                message: 'Some fields in this section are incomplete. You can continue, but remember to fill them before submitting.',
-                type: 'warning',
-            });
+            setToast({ message: 'Some fields in this section are incomplete. You may continue, but please remember to fill them before submitting.', type: 'warning' });
         }
         setCurrentStep((prev) => Math.min(prev + 1, 4));
     };
@@ -256,34 +548,36 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
 
     const isStepValid = () => {
         if (currentStep === 1) return !!formData.hci_id;
-        if (currentStep === 2) return !!formData.confinement_id;
-        if (currentStep === 4) return formData.finalCertification && formData.hci_name;
+        if (currentStep === 2) {
+            if (!formData.confinement_id) return false;
+            if (!formData.admission_diagnosis?.trim()) return false;
+            if (formData.professionals.length === 0) return false;
+            const allRowsComplete = formData.discharge_diagnoses.every(d =>
+                d.diagnosis?.trim() && d.icd_code?.trim() && d.related_procedure?.trim() &&
+                d.rvs_code?.trim() && d.procedure_date?.trim() && d.laterality?.trim()
+            );
+            if (!allRowsComplete) return false;
+            return true;
+        }
+        if (currentStep === 3) {
+            if (!formData.certifiedEnough && !formData.consumedPrior) return false;
+            if (!formData.representativeName?.trim()) return false;
+            if (!formData.representativeDateSigned) return false;
+            if (!formData.consentMedicalRecords || !formData.consentLiabilityFree) return false;
+            return true;
+        }
+        if (currentStep === 4) return formData.finalCertification && !!formData.hci_representative_name;
         return true;
-    };
-
-    const formatDate = (ts) => {
-        if (!ts) return '';
-        return new Date(ts).toLocaleDateString('en-PH', {
-            year: 'numeric', month: 'long', day: 'numeric'
-        });
-    };
-
-    const formatTime = (ts) => {
-        if (!ts) return '';
-        return new Date(ts).toLocaleTimeString('en-PH', {
-            hour: 'numeric', minute: '2-digit', hour12: true
-        });
     };
 
     return (
         <div className="max-w-5xl mx-auto pb-12">
             {/* Toast banner */}
-            {toast && (
-                <Toast
-                    message={toast.message}
-                    type={toast.type}
-                    onClose={() => setToast(null)}
-                />
+            {toast && ReactDOM.createPortal(
+                <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[9999] w-full max-w-2xl px-4">
+                    <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
+                </div>,
+                document.body
             )}
             <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
                 {/* Header */}
@@ -366,9 +660,9 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                             {/* ---------------- PART I HERE ---------------- */}
                             {currentStep === 1 && (
                                 <div className="space-y-8">
-                                    {/* HCI Name Dropdown */}
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">
+                                    {/* HCI Name Search */}
+                                    <div className="space-y-2 relative">
+                                        <label className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">
                                             Name of Health Care Institution
                                         </label>
                                         {hciLoading ? (
@@ -376,56 +670,69 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                 Loading institutions...
                                             </div>
                                         ) : (
-                                            <select
-                                                value={formData.hci_id}
-                                                onChange={(e) => handleHCISelect(e.target.value)}
-                                                className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-philhealth-green/20 outline-none transition-all"
-                                            >
-                                                <option value="">— Select a Health Care Institution —</option>
-                                                {hciList.map((hci) => (
-                                                    <option key={hci.hci_id} value={hci.hci_id}>
-                                                        {hci.hci_name}
-                                                    </option>
-                                                ))}
-                                            </select>
+                                            <>
+                                                <input
+                                                    type="text"
+                                                    value={hciQuery}
+                                                    onChange={(e) => {
+                                                        const q = e.target.value;
+                                                        setHciQuery(q);
+                                                        setHciSelected(false);
+                                                        if (q.length < 2) {
+                                                            setHciFiltered([]);
+                                                        } else {
+                                                            const filtered = hciList.filter(h =>
+                                                                h.hci_name?.toLowerCase().includes(q.toLowerCase())
+                                                            );
+                                                            setHciFiltered(filtered.slice(0, 10));
+                                                        }
+                                                    }}
+                                                    placeholder="Type institution name to search..."
+                                                    className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-philhealth-green/20 outline-none transition-all"
+                                                />
+
+                                                {/* Search results dropdown */}
+                                                {hciFiltered.length > 0 && !hciSelected && (
+                                                    <motion.div
+                                                        initial={{ opacity: 0, y: -4 }}
+                                                        animate={{ opacity: 1, y: 0 }}
+                                                        className="absolute z-20 w-full bg-white border border-slate-200 rounded-xl shadow-xl overflow-y-auto max-h-60 mt-1"
+                                                    >
+                                                        {hciFiltered.map((hci) => (
+                                                            <button
+                                                                key={hci.hci_id}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setHciQuery(hci.hci_name);
+                                                                    setHciFiltered([]);
+                                                                    setHciSelected(true);
+                                                                    handleHCISelect(hci.hci_id);
+                                                                }}
+                                                                className="w-full text-left px-5 py-3 text-xs font-bold hover:bg-emerald-50 hover:text-philhealth-green transition-colors border-b border-slate-100 last:border-0"
+                                                            >
+                                                                {hci.hci_name}
+                                                                <span className="text-[10px] text-slate-400 ml-2">
+                                        — {hci.hci_address_city || ''}{hci.hci_address_province ? `, ${hci.hci_address_province}` : ''}
+                                    </span>
+                                                            </button>
+                                                        ))}
+                                                    </motion.div>
+                                                )}
+                                            </>
                                         )}
                                     </div>
 
                                     {/* Auto-filled fields — shown only after selection */}
-                                    {formData.hci_id && (
+                                    {formData.hci_id && hciSelected && (
                                         <motion.div
                                             initial={{ opacity: 0, y: -8 }}
                                             animate={{ opacity: 1, y: 0 }}
                                             className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 bg-emerald-50/50 rounded-2xl border border-emerald-100"
                                         >
-                                            <FormInput
-                                                label="PhilHealth Accreditation Number (PAN)"
-                                                name="pan_number"
-                                                value={formData.pan_number}
-                                                onChange={() => {}}
-                                                disabled={true}
-                                            />
-                                            <FormInput
-                                                label="Street Address"
-                                                name="hci_address_street"
-                                                value={formData.hci_address_street}
-                                                onChange={() => {}}
-                                                disabled={true}
-                                            />
-                                            <FormInput
-                                                label="City / Municipality"
-                                                name="hci_address_city"
-                                                value={formData.hci_address_city}
-                                                onChange={() => {}}
-                                                disabled={true}
-                                            />
-                                            <FormInput
-                                                label="Province / Region"
-                                                name="hci_address_province"
-                                                value={formData.hci_address_province}
-                                                onChange={() => {}}
-                                                disabled={true}
-                                            />
+                                            <FormInput label="PhilHealth Accreditation Number (PAN)" name="pan_number" value={formData.pan_number} onChange={() => {}} disabled={true} />
+                                            <FormInput label="Street Address" name="hci_address_street" value={formData.hci_address_street} onChange={() => {}} disabled={true} />
+                                            <FormInput label="City / Municipality" name="hci_address_city" value={formData.hci_address_city} onChange={() => {}} disabled={true} />
+                                            <FormInput label="Province / Region" name="hci_address_province" value={formData.hci_address_province} onChange={() => {}} disabled={true} />
                                         </motion.div>
                                     )}
                                 </div>
@@ -437,7 +744,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
 
                                     {/* 1. PATIENT NAME SEARCH */}
                                     <div className="space-y-2 relative">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">
+                                        <label className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">
                                             1. Name of Patient
                                         </label>
                                         <input
@@ -453,7 +760,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                             <motion.div
                                                 initial={{ opacity: 0, y: -4 }}
                                                 animate={{ opacity: 1, y: 0 }}
-                                                className="absolute z-20 w-full bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden mt-1"
+                                                className="absolute z-20 w-full bg-white border border-slate-200 rounded-xl shadow-xl overflow-y-auto max-h-60 mt-1"
                                             >
                                                 {patientSearching && (
                                                     <div className="px-5 py-3 text-xs text-slate-400 italic">Searching...</div>
@@ -488,63 +795,96 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                             </div>
 
                                             {/* 2. Was patient referred? */}
+                                            {/* 2. Was patient referred? */}
                                             <div className="space-y-4 p-6 bg-slate-50 rounded-2xl border border-slate-100">
-                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">
-                                                    2. Was patient referred by another Health Care Institution (HCI)?
+                                                <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">
+                                                    2. Was patient referred by another Health Care Institution (HCI)? <span className="text-red-500">*</span>
                                                 </p>
                                                 <div className="flex gap-6">
-                                                    <span className={`px-4 py-2 rounded-lg text-xs font-black uppercase border ${formData.is_referred === false ? 'bg-philhealth-green text-white border-philhealth-green' : 'bg-white text-slate-400 border-slate-200'}`}>No</span>
-                                                    <span className={`px-4 py-2 rounded-lg text-xs font-black uppercase border ${formData.is_referred === true  ? 'bg-philhealth-green text-white border-philhealth-green' : 'bg-white text-slate-400 border-slate-200'}`}>Yes</span>
+                                                    <button type="button" onClick={() => setFormData(prev => ({ ...prev, is_referred: false }))}
+                                                            className={`px-4 py-2 rounded-lg text-xs font-black uppercase border transition-all ${formData.is_referred === false ? 'bg-philhealth-green text-white border-philhealth-green' : 'bg-white text-slate-400 border-slate-200 hover:border-philhealth-green/30'}`}>No</button>
+                                                    <button type="button" onClick={() => setFormData(prev => ({ ...prev, is_referred: true }))}
+                                                            className={`px-4 py-2 rounded-lg text-xs font-black uppercase border transition-all ${formData.is_referred === true ? 'bg-philhealth-green text-white border-philhealth-green' : 'bg-white text-slate-400 border-slate-200 hover:border-philhealth-green/30'}`}>Yes</button>
                                                 </div>
                                                 {formData.is_referred && (
                                                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4 pt-2">
-                                                        <FormInput label="Name of Referring HCI"    name="name_referral"           value={formData.name_referral}           onChange={() => {}} disabled />
-                                                        <FormInput label="Building / Street"         name="building_street_referral" value={formData.building_street_referral} onChange={() => {}} disabled />
-                                                        <FormInput label="City / Municipality"       name="city_referral"           value={formData.city_referral}           onChange={() => {}} disabled />
-                                                        <FormInput label="Province"                  name="province_referral"       value={formData.province_referral}       onChange={() => {}} disabled />
-                                                        <FormInput label="Zip Code"                  name="zip_referral"            value={formData.zip_referral}            onChange={() => {}} disabled />
+                                                        <FormInput label="Name of Referring HCI"  name="name_referral"            value={formData.name_referral}            onChange={handleChange} />
+                                                        <FormInput label="Building / Street"       name="building_street_referral" value={formData.building_street_referral} onChange={handleChange} />
+                                                        <FormInput label="City / Municipality"     name="city_referral"            value={formData.city_referral}            onChange={handleChange} />
+                                                        <FormInput label="Province"                name="province_referral"        value={formData.province_referral}        onChange={handleChange} />
+                                                        <FormInput label="Zip Code"                name="zip_referral"             value={formData.zip_referral}             onChange={handleChange} />
                                                     </div>
                                                 )}
                                             </div>
 
                                             {/* 3. Confinement Period */}
                                             <div className="space-y-3 p-6 bg-slate-50 rounded-2xl border border-slate-100">
-                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">3. Confinement Period</p>
+                                                <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">3. Confinement Period <span className="text-red-500">*</span></p>
                                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                                    <FormInput label="Date Admitted"     name="date_admitted"  value={formatDate(formData.date_time_admitted)}   onChange={() => {}} disabled />
-                                                    <FormInput label="Time Admitted"     name="time_admitted"  value={formatTime(formData.date_time_admitted)}   onChange={() => {}} disabled />
-                                                    <FormInput label="Date Discharged"   name="date_discharged" value={formatDate(formData.date_time_discharged)} onChange={() => {}} disabled />
-                                                    <FormInput label="Time Discharged"   name="time_discharged" value={formatTime(formData.date_time_discharged)} onChange={() => {}} disabled />
+                                                    <FormInput label="Date Admitted"   name="date_admitted"   type="date" value={formData.date_admitted}   onChange={handleChange} />
+                                                    <FormInput label="Time Admitted"   name="time_admitted"   type="time" value={formData.time_admitted}   onChange={handleChange} />
+                                                    <FormInput label="Date Discharged" name="date_discharged" type="date" value={formData.date_discharged} onChange={handleChange} />
+                                                    <FormInput label="Time Discharged" name="time_discharged" type="time" value={formData.time_discharged} onChange={handleChange} />
                                                 </div>
                                             </div>
 
                                             {/* 4. Patient Disposition */}
+                                            {/* 4. Patient Disposition */}
                                             <div className="space-y-3 p-6 bg-slate-50 rounded-2xl border border-slate-100">
-                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">4. Patient Disposition</p>
+                                                <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">4. Patient Disposition <span className="text-red-500">*</span></p>
                                                 <div className="flex flex-wrap gap-3">
                                                     {['Improved','Recovered','Home/Discharged Against Medical Advise','Absconded','Expired','Transferred/Referred'].map(opt => (
-                                                        <span key={opt} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase border ${formData.disposition === opt ? 'bg-philhealth-green text-white border-philhealth-green' : 'bg-white text-slate-300 border-slate-200'}`}>
-                                {opt}
-                            </span>
+                                                        <button key={opt} type="button"
+                                                                onClick={() => setFormData(prev => ({ ...prev, disposition: opt }))}
+                                                                className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase border transition-all ${formData.disposition === opt ? 'bg-philhealth-green text-white border-philhealth-green' : 'bg-white text-slate-300 border-slate-200 hover:border-philhealth-green/30 hover:text-slate-500'}`}>
+                                                            {opt}
+                                                        </button>
                                                     ))}
                                                 </div>
+
+                                                {formData.disposition === 'Expired' && (
+                                                    <div className="grid grid-cols-2 gap-4 pt-3 border-t border-slate-200 mt-2">
+                                                        <FormInput label="Date of Expiration" name="date_expiration" type="date"
+                                                                   value={formData.date_expiration || (formData.date_time_expiration ? formData.date_time_expiration.slice(0, 10) : '')}
+                                                                   onChange={handleChange} />
+                                                        <FormInput label="Time of Expiration" name="time_expiration" type="time"
+                                                                   value={formData.time_expiration || (formData.date_time_expiration ? formData.date_time_expiration.slice(11, 16) : '')}
+                                                                   onChange={handleChange} />
+                                                    </div>
+                                                )}
+
+                                                {formData.disposition === 'Transferred/Referred' && (
+                                                    <div className="space-y-4 pt-3 border-t border-slate-200 mt-2">
+                                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Transferred / Referred To:</p>
+                                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                                            <FormInput label="HCI Name"            name="transferred_hci_name" value={formData.transferred_hci_name} onChange={handleChange} />
+                                                            <FormInput label="Building / Street"   name="transferred_street"   value={formData.transferred_street}   onChange={handleChange} />
+                                                            <FormInput label="City / Municipality" name="transferred_city"     value={formData.transferred_city}     onChange={handleChange} />
+                                                            <FormInput label="Province"            name="transferred_province" value={formData.transferred_province} onChange={handleChange} />
+                                                            <FormInput label="Zip Code"            name="transferred_zip"      value={formData.transferred_zip}      onChange={handleChange} />
+                                                        </div>
+                                                        <FormInput label="Reason for Referral / Transfer" name="reason_referral" value={formData.reason_referral} onChange={handleChange} />
+                                                    </div>
+                                                )}
                                             </div>
 
                                             {/* 5. Type of Accommodation */}
                                             <div className="space-y-3 p-6 bg-slate-50 rounded-2xl border border-slate-100">
-                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">5. Type of Accommodation</p>
+                                                <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">5. Type of Accommodation <span className="text-red-500">*</span></p>
                                                 <div className="flex gap-4">
                                                     {['Private','Non-Private (Charity/Service)'].map(opt => (
-                                                        <span key={opt} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase border ${formData.accomodation_type === opt ? 'bg-philhealth-green text-white border-philhealth-green' : 'bg-white text-slate-300 border-slate-200'}`}>
-                                {opt}
-                            </span>
+                                                        <button key={opt} type="button"
+                                                                onClick={() => setFormData(prev => ({ ...prev, accomodation_type: opt }))}
+                                                                className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase border transition-all ${formData.accomodation_type === opt ? 'bg-philhealth-green text-white border-philhealth-green' : 'bg-white text-slate-300 border-slate-200 hover:border-philhealth-green/30 hover:text-slate-500'}`}>
+                                                            {opt}
+                                                        </button>
                                                     ))}
                                                 </div>
                                             </div>
 
                                             {/* 6. Admission Diagnosis — free text, doctor fills this */}
                                             <div className="space-y-2">
-                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">6. Admission Diagnosis/es</p>
+                                                <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">6. Admission Diagnosis/es <span className="text-red-500">*</span></p>
                                                 <textarea
                                                     name="admission_diagnosis"
                                                     value={formData.admission_diagnosis || ''}
@@ -554,36 +894,523 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                 />
                                             </div>
 
-                                            {/* 7. Discharge Diagnosis — from discharge_diagnosis table */}
+                                            {/* 7. Discharge Diagnosis/es */}
                                             <div className="space-y-4">
-                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">7. Discharge Diagnosis/es</p>
+                                                <div className="flex items-center justify-between">
+                                                    <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">
+                                                        7. Discharge Diagnosis/es <span className="text-red-500">*</span>
+                                                    </p>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            setFormData(prev => ({
+                                                                ...prev,
+                                                                discharge_diagnoses: [
+                                                                    ...prev.discharge_diagnoses,
+                                                                    { diagnosis_id: Date.now(), diagnosis: '', icd_code: '', related_procedure: '', rvs_code: '', procedure_date: '', laterality: '' }
+                                                                ]
+                                                            }))
+                                                        }
+                                                        className="text-[10px] px-3 py-1.5 bg-philhealth-green text-white rounded-md font-bold uppercase transition hover:opacity-90"
+                                                    >
+                                                        + Add Row
+                                                    </button>
+                                                </div>
                                                 {formData.discharge_diagnoses.length === 0 ? (
-                                                    <p className="text-xs text-slate-400 italic px-1">No discharge diagnoses found for this patient.</p>
+                                                    <p className="text-xs text-slate-400 italic px-1">
+                                                        No discharge diagnoses yet. Click "+ Add Row" to add one.
+                                                    </p>
                                                 ) : (
                                                     <div className="overflow-x-auto rounded-xl border border-slate-100">
                                                         <table className="w-full text-[10px]">
                                                             <thead className="bg-slate-50 border-b border-slate-100">
                                                             <tr>
-                                                                {['Diagnosis','ICD-10 Code','Related Procedure','RVS Code','Date of Procedure','Laterality'].map(h => (
-                                                                    <th key={h} className="px-4 py-3 text-left font-black text-slate-400 uppercase tracking-wider">{h}</th>
+                                                                {['Diagnosis', 'ICD-10 Code', 'Related Procedure', 'RVS Code', 'Date of Procedure', 'Laterality', ''].map(h => (
+                                                                    <th key={h} className="px-3 py-3 text-left font-black text-slate-900 uppercase tracking-wider">{h}</th>
                                                                 ))}
                                                             </tr>
                                                             </thead>
                                                             <tbody>
                                                             {formData.discharge_diagnoses.map((d, i) => (
-                                                                <tr key={d.diagnosis_id} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
-                                                                    <td className="px-4 py-3 font-bold text-slate-700">{d.diagnosis || '—'}</td>
-                                                                    <td className="px-4 py-3 text-slate-500">{d.icd_code || '—'}</td>
-                                                                    <td className="px-4 py-3 text-slate-500">{d.related_procedure || '—'}</td>
-                                                                    <td className="px-4 py-3 text-slate-500">{d.rvs_code || '—'}</td>
-                                                                    <td className="px-4 py-3 text-slate-500">{d.procedure_date || '—'}</td>
-                                                                    <td className="px-4 py-3 text-slate-500">{d.laterality || '—'}</td>
+                                                                <tr key={d.diagnosis_id ?? i} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+                                                                    {['diagnosis', 'icd_code', 'related_procedure', 'rvs_code', 'procedure_date', 'laterality'].map((field) => (
+                                                                        <td key={field} className="px-2 py-2">
+                                                                            <input
+                                                                                type={field === 'procedure_date' ? 'date' : 'text'}
+                                                                                value={d[field] || ''}
+                                                                                onChange={(e) => {
+                                                                                    const updated = [...formData.discharge_diagnoses];
+                                                                                    updated[i] = { ...updated[i], [field]: e.target.value };
+                                                                                    setFormData(prev => ({ ...prev, discharge_diagnoses: updated }));
+                                                                                }}
+                                                                                className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-700 focus:ring-1 focus:ring-philhealth-green/30 outline-none transition-all min-w-[80px]"
+                                                                            />
+                                                                        </td>
+                                                                    ))}
+                                                                    <td className="px-2 py-2">
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() =>
+                                                                                setFormData(prev => ({
+                                                                                    ...prev,
+                                                                                    discharge_diagnoses: prev.discharge_diagnoses.filter((_, idx) => idx !== i)
+                                                                                }))
+                                                                            }
+                                                                            className="text-red-400 hover:text-red-600 text-[9px] font-black uppercase"
+                                                                        >
+                                                                            Remove
+                                                                        </button>
+                                                                    </td>
                                                                 </tr>
                                                             ))}
                                                             </tbody>
                                                         </table>
                                                     </div>
                                                 )}
+                                                {/* Incomplete row warning */}
+                                                {formData.discharge_diagnoses.length > 0 &&
+                                                    formData.discharge_diagnoses.some(d =>
+                                                        !d.diagnosis?.trim() || !d.icd_code?.trim() || !d.related_procedure?.trim() ||
+                                                        !d.rvs_code?.trim() || !d.procedure_date?.trim() || !d.laterality?.trim()
+                                                    ) && (
+                                                        <p className="text-[10px] text-red-500 font-bold flex items-center gap-1.5 px-1 pt-1">
+                                                            ⚠ All fields in each diagnosis row must be filled before continuing.
+                                                        </p>
+                                                    )}
+                                            </div>
+
+                                            {/* --- NEW ADDITION: 8. Special Considerations --- */}
+                                            <div className="space-y-4 p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                                                <div className="space-y-1">
+                                                    <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">8. Special Considerations</p>
+                                                    <p className="text-[10px] text-slate-600 italic font-medium leading-relaxed">
+                                                        a. For the following repetitive procedures, select procedure/s that applies and enumerate the procedure/sessions dates [mm-dd-yyyy]. For chemotherapy, see guidelines.
+                                                    </p>
+                                                </div>
+
+                                                {/* Dropdown to add a procedure */}
+                                                <div className="flex items-center gap-3 pt-2">
+                                                    <select
+                                                        defaultValue=""
+                                                        onChange={(e) => {
+                                                            const id = e.target.value;
+                                                            if (!id) return;
+                                                            setFormData(prev => ({
+                                                                ...prev,
+                                                                special_considerations: {
+                                                                    ...prev.special_considerations,
+                                                                    [id]: {
+                                                                        ...prev.special_considerations[id],
+                                                                        checked: true,
+                                                                        dates: prev.special_considerations[id]?.dates?.length
+                                                                            ? prev.special_considerations[id].dates
+                                                                            : ['']
+                                                                    }
+                                                                }
+                                                            }));
+                                                            e.target.value = '';
+                                                        }}
+                                                        className="flex-1 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-philhealth-green/20 outline-none transition-all"
+                                                    >
+                                                        <option value="">— Select a procedure to add —</option>
+                                                        {[
+                                                            { id: 'hemodialysis',        label: 'Hemodialysis' },
+                                                            { id: 'blood_transfusion',   label: 'Blood Transfusion' },
+                                                            { id: 'peritoneal_dialysis', label: 'Peritoneal Dialysis' },
+                                                            { id: 'brachytherapy',       label: 'Brachytherapy' },
+                                                            { id: 'radiotherapy_linac',  label: 'Radiotherapy (LINAC)' },
+                                                            { id: 'chemotherapy',        label: 'Chemotherapy' },
+                                                            { id: 'radiotherapy_cobalt', label: 'Radiotherapy (COBALT)' },
+                                                            { id: 'simple_debridement',  label: 'Simple Debridement' }
+                                                        ].filter(proc => !formData.special_considerations?.[proc.id]?.checked)
+                                                         .map(proc => (
+                                                            <option key={proc.id} value={proc.id}>{proc.label}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+
+                                                {/* Active procedure cards */}
+                                                <div className="space-y-3">
+                                                    {[
+                                                        { id: 'hemodialysis',        label: 'Hemodialysis' },
+                                                        { id: 'blood_transfusion',   label: 'Blood Transfusion' },
+                                                        { id: 'peritoneal_dialysis', label: 'Peritoneal Dialysis' },
+                                                        { id: 'brachytherapy',       label: 'Brachytherapy' },
+                                                        { id: 'radiotherapy_linac',  label: 'Radiotherapy (LINAC)' },
+                                                        { id: 'chemotherapy',        label: 'Chemotherapy' },
+                                                        { id: 'radiotherapy_cobalt', label: 'Radiotherapy (COBALT)' },
+                                                        { id: 'simple_debridement',  label: 'Simple Debridement' }
+                                                    ].filter(proc => !!formData.special_considerations?.[proc.id]?.checked)
+                                                     .map((proc) => {
+                                                        const dates = formData.special_considerations?.[proc.id]?.dates || [''];
+                                                        return (
+                                                            <div key={proc.id} className="p-4 bg-white rounded-xl border border-philhealth-green/30 shadow-sm space-y-3">
+                                                                {/* Card header */}
+                                                                <div className="flex items-center justify-between">
+                                                                    <span className="text-[11px] font-black text-slate-700 uppercase tracking-wide">
+                                                                        {proc.label}
+                                                                    </span>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            setFormData(prev => ({
+                                                                                ...prev,
+                                                                                special_considerations: {
+                                                                                    ...prev.special_considerations,
+                                                                                    [proc.id]: { checked: false, dates: [''] }
+                                                                                }
+                                                                            }));
+                                                                        }}
+                                                                        className="text-slate-300 hover:text-red-400 transition-colors text-lg font-bold leading-none"
+                                                                        title="Remove procedure"
+                                                                    >
+                                                                        ×
+                                                                    </button>
+                                                                </div>
+
+                                                                {/* Date rows */}
+                                                                <div className="space-y-2">
+                                                                    {dates.map((dateVal, idx) => (
+                                                                        <div key={idx} className="flex items-center gap-2">
+                                                                            <span className="text-[10px] font-black text-slate-400 w-6 text-right shrink-0">
+                                                                                {idx + 1}.
+                                                                            </span>
+                                                                            <input
+                                                                                type="date"
+                                                                                value={dateVal}
+                                                                                onChange={(e) => {
+                                                                                    const updated = [...dates];
+                                                                                    updated[idx] = e.target.value;
+                                                                                    setFormData(prev => ({
+                                                                                        ...prev,
+                                                                                        special_considerations: {
+                                                                                            ...prev.special_considerations,
+                                                                                            [proc.id]: {
+                                                                                                ...prev.special_considerations[proc.id],
+                                                                                                dates: updated
+                                                                                            }
+                                                                                        }
+                                                                                    }));
+                                                                                }}
+                                                                                className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:ring-2 focus:ring-philhealth-green/20 focus:border-philhealth-green/40 outline-none transition-all"
+                                                                            />
+                                                                            {dates.length > 1 && (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => {
+                                                                                        const updated = dates.filter((_, i) => i !== idx);
+                                                                                        setFormData(prev => ({
+                                                                                            ...prev,
+                                                                                            special_considerations: {
+                                                                                                ...prev.special_considerations,
+                                                                                                [proc.id]: {
+                                                                                                    ...prev.special_considerations[proc.id],
+                                                                                                    dates: updated
+                                                                                                }
+                                                                                            }
+                                                                                        }));
+                                                                                    }}
+                                                                                    className="text-slate-300 hover:text-red-400 transition-colors text-base font-bold leading-none shrink-0"
+                                                                                    title="Remove date"
+                                                                                >
+                                                                                    ×
+                                                                                </button>
+                                                                            )}
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+
+                                                                {/* Add date row */}
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setFormData(prev => ({
+                                                                            ...prev,
+                                                                            special_considerations: {
+                                                                                ...prev.special_considerations,
+                                                                                [proc.id]: {
+                                                                                    ...prev.special_considerations[proc.id],
+                                                                                    dates: [...dates, '']
+                                                                                }
+                                                                            }
+                                                                        }));
+                                                                    }}
+                                                                    className="text-[10px] font-black text-philhealth-green hover:text-philhealth-green-dark uppercase tracking-wider flex items-center gap-1 transition-colors"
+                                                                >
+                                                                    + Add Date
+                                                                </button>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                    {Object.values(formData.special_considerations || {}).every(v => !v?.checked) && (
+                                                        <p className="text-[11px] text-slate-400 italic px-1">No procedures selected yet.</p>
+                                                    )}
+                                                </div>
+                                                {/* b. Z-Benefit Package */}
+                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center p-4 bg-white rounded-xl border border-slate-200/60 shadow-sm">
+                                                    <div className="text-[11px] font-black text-slate-700 uppercase tracking-wide">
+                                                        b. For Z-Benefit Package
+                                                    </div>
+                                                    <div className="md:col-span-2">
+                                                        <FormInput
+                                                            label="Z-Benefit Package Code"
+                                                            value={formData.packages?.z_benefit_code || ''}
+                                                            onChange={(e) => setFormData(prev => ({ ...prev, packages: { ...prev.packages, z_benefit_code: e.target.value } }))}
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                {/* c. MCP Package */}
+                                                <div className="space-y-2 p-4 bg-white rounded-xl border border-slate-200/60 shadow-sm">
+                                                    <p className="text-[11px] font-black text-slate-700 uppercase tracking-wide">
+                                                        c. For MCP Package <span className="text-[10px] text-slate-400 font-medium normal-case italic">(enumerate four dates [mm-dd-year] of pre-natal check-ups)</span>
+                                                    </p>
+                                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                                        {[1, 2, 3, 4].map((num, idx) => (
+                                                            <FormInput
+                                                                key={num}
+                                                                label={`Check-up ${num}`}
+                                                                type="date"
+                                                                value={formData.packages?.mcp_dates?.[idx] || ''}
+                                                                onChange={(e) => {
+                                                                    const updated = [...(formData.packages?.mcp_dates || ['', '', '', ''])];
+                                                                    updated[idx] = e.target.value;
+                                                                    setFormData(prev => ({ ...prev, packages: { ...prev.packages, mcp_dates: updated } }));
+                                                                }}
+                                                            />
+                                                        ))}
+                                                    </div>
+                                                </div>
+
+                                                {/* d. TB DOTS Package */}
+                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center p-4 bg-white rounded-xl border border-slate-200/60 shadow-sm">
+                                                    <div className="text-[11px] font-black text-slate-700 uppercase tracking-wide">
+                                                        d. For TB DOTS Package
+                                                    </div>
+                                                    <div className="flex gap-6 md:col-span-2">
+                                                        <label className="flex items-center gap-2.5 text-xs font-bold text-slate-600 cursor-pointer">
+                                                            <input
+                                                                type="radio"
+                                                                name="tb_dots_phase"
+                                                                checked={!!formData.packages?.tb_dots_intensive}
+                                                                onChange={() => setFormData(prev => ({ ...prev, packages: { ...prev.packages, tb_dots_intensive: true, tb_dots_maintenance: false } }))}
+                                                                className="w-4 h-4 text-philhealth-green border-slate-300 accent-emerald-600 cursor-pointer"
+                                                            />
+                                                            Intensive Phase
+                                                        </label>
+                                                        <label className="flex items-center gap-2.5 text-xs font-bold text-slate-600 cursor-pointer">
+                                                            <input
+                                                                type="radio"
+                                                                name="tb_dots_phase"
+                                                                checked={!!formData.packages?.tb_dots_maintenance}
+                                                                onChange={() => setFormData(prev => ({ ...prev, packages: { ...prev.packages, tb_dots_intensive: false, tb_dots_maintenance: true } }))}
+                                                                className="w-4 h-4 text-philhealth-green border-slate-300 accent-emerald-600 cursor-pointer"
+                                                            />
+                                                            Maintenance Phase
+                                                        </label>
+                                                        {(formData.packages?.tb_dots_intensive || formData.packages?.tb_dots_maintenance) && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setFormData(prev => ({ ...prev, packages: { ...prev.packages, tb_dots_intensive: false, tb_dots_maintenance: false } }))}
+                                                                className="text-[10px] text-slate-400 hover:text-red-400 font-bold transition-colors"
+                                                            >
+                                                                Clear
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                {/* e. Animal Bite Package */}
+                                                <div className="space-y-3 p-4 bg-white rounded-xl border border-slate-200/60 shadow-sm">
+                                                    <div className="flex justify-between items-center">
+                                                        <p className="text-[11px] font-black text-slate-700 uppercase tracking-wide">
+                                                            e. For Animal Bite Package <span className="text-[10px] text-slate-400 font-medium normal-case italic">(vaccine session dates)</span>
+                                                        </p>
+                                                        <span className="text-[9px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase tracking-wide">
+                                                            ARV / RIG
+                                                        </span>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                                                        {[
+                                                            { label: 'Day 0 ARV', field: 'day_0_arv', isDate: true },
+                                                            { label: 'Day 3 ARV', field: 'day_3_arv', isDate: true },
+                                                            { label: 'Day 7 ARV', field: 'day_7_arv', isDate: true },
+                                                            { label: 'RIG',       field: 'rig',       isDate: true },
+                                                            { label: 'Others (Specify)', field: 'others', isDate: false },
+                                                        ].map(({ label, field, isDate }) => (
+                                                            <FormInput
+                                                                key={field}
+                                                                label={label}
+                                                                type={isDate ? 'date' : 'text'}
+                                                                value={formData.packages?.animal_bite?.[field] || ''}
+                                                                onChange={(e) => setFormData(prev => ({
+                                                                    ...prev,
+                                                                    packages: {
+                                                                        ...prev.packages,
+                                                                        animal_bite: { ...prev.packages.animal_bite, [field]: e.target.value }
+                                                                    }
+                                                                }))}
+                                                            />
+                                                        ))}
+                                                    </div>
+                                                </div>
+
+                                                {/* f. Newborn Care Package */}
+                                                <div className="space-y-4 p-4 bg-white rounded-xl border border-slate-200/60 shadow-sm">
+                                                    <div className="text-[11px] font-black text-slate-700 uppercase tracking-wide">
+                                                        f. For Newborn Care Package
+                                                    </div>
+
+                                                    {/* Main Parent Row Options */}
+                                                    <div className="flex flex-wrap gap-6 px-2 py-1 bg-slate-50 rounded-lg border border-slate-100">
+                                                        {[
+                                                            { label: 'Essential Newborn Care',        field: 'is_essential' },
+                                                            { label: 'Newborn Hearing Screening Test', field: 'is_hearing_screening' },
+                                                            { label: 'Newborn Screening Test',         field: 'is_screening' },
+                                                        ].map(({ label, field }) => (
+                                                            <label key={field} className="flex items-center gap-2.5 text-xs font-bold text-slate-600 cursor-pointer">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={!!formData.packages?.newborn?.[field]}
+                                                                    onChange={(e) => setFormData(prev => ({
+                                                                        ...prev,
+                                                                        packages: { ...prev.packages, newborn: { ...prev.packages.newborn, [field]: e.target.checked } }
+                                                                    }))}
+                                                                    className="w-4 h-4 rounded text-philhealth-green border-slate-300 accent-emerald-600 cursor-pointer"
+                                                                />
+                                                                {label}
+                                                            </label>
+                                                        ))}
+                                                    </div>
+
+                                                    {/* Sub-section: For Essential Newborn Care */}
+                                                    <div className="p-4 rounded-xl border border-dashed border-slate-200 bg-white space-y-3">
+                                                        <p className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
+                                                            For Essential Newborn Care <span className="text-[9px] text-slate-400 font-medium normal-case italic">(applicable components)</span>
+                                                        </p>
+                                                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5 pl-1">
+                                                            {[
+                                                                { label: 'Immediate drying of newborn', field: 'is_immediate_drying' },
+                                                                { label: 'Early skin-to-skin contact',  field: 'is_early_skin' },
+                                                                { label: 'Timely cord clamping',        field: 'is_cord_clamping' },
+                                                                { label: 'Eye Prophylaxis',             field: 'is_eye_prophylaxis' },
+                                                                { label: 'Weighing of the newborn',     field: 'is_weighing' },
+                                                                { label: 'Vitamin K administration',    field: 'is_vitamink' },
+                                                                { label: 'BCG vaccination',             field: 'is_bcg' },
+                                                                { label: 'Non-separation / Breastfeeding', field: 'is_nonseparation' },
+                                                                { label: 'Hepatitis B vaccination',     field: 'is_hepaB' },
+                                                            ].map(({ label, field }) => (
+                                                                <label key={field} className="flex items-center gap-2 text-xs font-medium text-slate-600 cursor-pointer">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={!!formData.packages?.newborn?.[field]}
+                                                                        onChange={(e) => setFormData(prev => ({
+                                                                            ...prev,
+                                                                            packages: { ...prev.packages, newborn: { ...prev.packages.newborn, [field]: e.target.checked } }
+                                                                        }))}
+                                                                        className="w-3.5 h-3.5 rounded border-slate-300 text-emerald-600 accent-emerald-600 cursor-pointer"
+                                                                    />
+                                                                    {label}
+                                                                </label>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* g. Outpatient HIV/AIDS Treatment Package */}
+                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center p-4 bg-white rounded-xl border border-slate-200/60 shadow-sm">
+                                                    <div className="text-[11px] font-black text-slate-700 uppercase tracking-wide">
+                                                        g. For Outpatient HIV/AIDS Treatment Package
+                                                    </div>
+                                                    <div className="md:col-span-2">
+                                                        <FormInput
+                                                            label="Laboratory Number"
+                                                            value={formData.packages?.hiv_lab_number || ''}
+                                                            onChange={(e) => setFormData(prev => ({ ...prev, packages: { ...prev.packages, hiv_lab_number: e.target.value } }))}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* --- 9. PhilHealth Benefits Section --- */}
+                                            <div className="space-y-3 p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                                                <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">9. PhilHealth Benefits</p>
+                                                <div className="p-6 bg-slate-50/50 grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                    <FormInput
+                                                        label="First Case Rate"
+                                                        value={formData.philhealth_benefits?.first_case_rate || ''}
+                                                        onChange={(e) => setFormData(prev => ({
+                                                            ...prev,
+                                                            philhealth_benefits: { ...prev.philhealth_benefits, first_case_rate: e.target.value }
+                                                        }))}
+                                                    />
+                                                    <FormInput
+                                                        label="Second Case Rate"
+                                                        value={formData.philhealth_benefits?.second_case_rate || ''}
+                                                        onChange={(e) => setFormData(prev => ({
+                                                            ...prev,
+                                                            philhealth_benefits: { ...prev.philhealth_benefits, second_case_rate: e.target.value }
+                                                        }))}
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* --- 10. Accreditation Number/Professional Fees Section --- */}
+                                            <div className="space-y-3 p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                                                <div className="flex justify-between items-center border-b border-slate-200 pb-4">
+                                                    <div>
+                                                        <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.15em]">
+                                                            10. Accreditation <span className="text-red-500">*</span>
+                                                        </p>
+                                                    </div>
+                                                    <button 
+                                                        type="button"
+                                                        onClick={addProfessionalRow}
+                                                        className="text-[10px] px-3 py-1.5 bg-philhealth-green text-white rounded-md hover:shadow-philhealth-green/30 font-bold uppercase transition"
+                                                    >
+                                                        + Add Professional
+                                                    </button>
+                                                </div>
+
+                                                {formData.professionals.map((prof, index) => (
+                                                    <div key={index} className="relative grid grid-cols-12 gap-4 p-4 bg-slate-50 rounded-xl items-start border border-slate-100 hover:border-slate-200 transition">
+                                                        
+                                                        <button 
+                                                            type="button"
+                                                            onClick={() => removeProfessionalRow(index)}
+                                                            className="absolute top-2 right-2 text-red-400 hover:text-red-600 text-[9px] font-bold uppercase"
+                                                        >
+                                                            X
+                                                        </button>
+
+                                                        <div className="col-span-12 md:col-span-7 grid grid-cols-3 gap-3">
+                                                            <div className="col-span-1">
+                                                                <label className="block text-[10px] font-black text-slate-900 uppercase tracking-[0.15em] mb-1">Date Signed</label>
+                                                                <input type="date" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-philhealth-green/20 outline-none transition-all" value={prof.date} onChange={(e) => handleProfessionalChange(index, 'date', e.target.value)} />
+                                                            </div>
+                                                            <div className="col-span-2">
+                                                                <label className="block text-[10px] font-black text-slate-900 uppercase tracking-[0.15em] mb-1">Accreditation No.</label>
+                                                                <input className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-philhealth-green/20 outline-none transition-all" value={prof.accreditation_number} onChange={(e) => handleProfessionalChange(index, 'accreditation_number', e.target.value)} />
+                                                            </div>
+                                                            <div className="col-span-3">
+                                                                <label className="block text-[10px] font-black text-slate-900 uppercase tracking-[0.15em] mb-1">Name</label>
+                                                                <input className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-philhealth-green/20 outline-none transition-all" value={prof.name} onChange={(e) => handleProfessionalChange(index, 'name', e.target.value)} />
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="col-span-12 md:col-span-5 flex flex-col pt-1 gap-2 border-l border-slate-200 pl-4">
+                                                            <label className="flex items-center text-[11px] cursor-pointer text-slate-700">
+                                                                <input type="radio" name={`copay-${index}`} checked={!prof.is_copay} onChange={() => handleProfessionalChange(index, 'is_copay', false)} className="mr-2" />
+                                                                No co-pay on top of PhilHealth Benefit
+                                                            </label>
+                                                            <label className="flex items-center text-[11px] text-slate-700">
+                                                                <input type="radio" name={`copay-${index}`} checked={!!prof.is_copay} onChange={() => handleProfessionalChange(index, 'is_copay', true)} className="mr-2" />
+                                                                <span>With co-pay: Php</span>
+                                                                <input className="ml-2 w-24 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-philhealth-green/20 outline-none transition-all" value={prof.copay_amount} onChange={(e) => handleProfessionalChange(index, 'copay_amount', e.target.value)} />
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                ))}
                                             </div>
                                         </motion.div>
                                     )}
@@ -599,6 +1426,9 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                         <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest border-l-4 border-philhealth-green pl-4">
                                             A. CERTIFICATION OF CONSUMPTION OF BENEFITS:
                                         </h3>
+                                        <p className="text-[10px] text-slate-400 italic pl-5">
+                                            Please choose at least one of the options below. <span className="text-red-400 not-italic font-bold">*</span>
+                                        </p>
 
                                         {/* Option 1: Enough Coverage */}
                                         <div className="space-y-6 p-6 bg-emerald-50/50 rounded-2xl border border-emerald-100">
@@ -655,7 +1485,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
 
                                         <div className="flex items-center gap-4 py-2">
                                             <div className="flex-1 h-px bg-slate-200"></div>
-                                            <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">OR</span>
+                                            <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">AND/OR</span>
                                             <div className="flex-1 h-px bg-slate-200"></div>
                                         </div>
 
@@ -720,7 +1550,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                                     onChange={handleChange}
                                                                 />
                                                                 <FormInput
-                                                                    label="PhilHealth Benefit"
+                                                                    label="PhilHealth Benefit Amount"
                                                                     name="hciPhilhealthBenefit"
                                                                     type="number"
                                                                     value={formData.hciPhilhealthBenefit}
@@ -811,7 +1641,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                                     onChange={handleChange}
                                                                 />
                                                                 <FormInput
-                                                                    label="PhilHealth Benefit"
+                                                                    label="PhilHealth Benefit Amount"
                                                                     name="pfPhilhealthBenefit"
                                                                     type="number"
                                                                     value={formData.pfPhilhealthBenefit}
@@ -955,13 +1785,13 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
 
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                             <FormInput
-                                                label="Name of Member/Patient/Authorized Representative"
+                                                label={<>Name of Member/Patient/Authorized Representative <span className="text-red-500">*</span></>}
                                                 name="representativeName"
                                                 value={formData.representativeName}
                                                 onChange={handleChange}
                                             />
                                             <FormInput
-                                                label="Date"
+                                                label={<>Date <span className="text-red-500">*</span></>}
                                                 name="representativeDateSigned"
                                                 type="date"
                                                 value={formData.representativeDateSigned}
@@ -973,7 +1803,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                             <div className="space-y-4 p-6 bg-slate-50 rounded-xl">
                                                 <div className="flex justify-between items-center">
                                                     <label className="text-[10px] font-black uppercase text-slate-900 tracking-widest">
-                                                        Relationship of the representative
+                                                        Relationship of the representative <span className="text-red-500">*</span>
                                                     </label>
                                                     {formData.representativeRelationship && (
                                                         <button
@@ -1000,7 +1830,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                             <div className="space-y-4 p-6 bg-slate-50 rounded-xl">
                                                 <div className="flex justify-between items-center">
                                                     <label className="text-[10px] font-black uppercase text-slate-900 tracking-widest">
-                                                        Reason for signing on behalf
+                                                        Reason for signing on behalf <span className="text-red-500">*</span>
                                                     </label>
                                                     {formData.behalfReason && (
                                                         <button
@@ -1036,7 +1866,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                 </div>
                                                 <div className="flex-1">
                                                     <p className="text-[11px] text-slate-800 font-medium leading-relaxed">
-                                                        I hereby consent to the submission and examination of the patient’s pertinent medical records for the purpose of verifying the veracity of this claim to effect efficient processing of benefit payment.
+                                                        I hereby consent to the submission and examination of the patient’s pertinent medical records for the purpose of verifying the veracity of this claim to effect efficient processing of benefit payment. <span className="text-red-500 font-black">*</span>
                                                     </p>
                                                 </div>
                                             </label>
@@ -1055,7 +1885,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                                 </div>
                                                 <div className="flex-1">
                                                     <p className="text-[11px] text-slate-800 font-medium leading-relaxed">
-                                                        I hereby hold PhilHealth or any of its officers, employees and/or representatives free from any and all legal liabilities relative to the herein-mentioned consent which I have voluntarily and willingly given in connection with this claim for reimbursement before PhilHealth.
+                                                        I hereby hold PhilHealth or any of its officers, employees and/or representatives free from any and all legal liabilities relative to the herein-mentioned consent which I have voluntarily and willingly given in connection with this claim for reimbursement before PhilHealth. <span className="text-red-500 font-black">*</span>
                                                     </p>
                                                 </div>
                                             </label>
@@ -1072,9 +1902,9 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                     {/* Row 1: Name of Authorized Representative */}
                                     <div className="grid grid-cols-1">
                                         <FormInput
-                                            label="Name of Authorized HCI Representative"
-                                            name="hci_name"
-                                            value={formData.hci_name}
+                                            label={<>Name of Authorized HCI Representative <span className="text-red-500">*</span></>}
+                                            name="hci_representative_name"
+                                            value={formData.hci_representative_name}
                                             onChange={handleChange}
                                         />
                                     </div>
@@ -1082,7 +1912,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                     {/* Row 2: Designation and Date side-by-side */}
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                         <FormInput
-                                            label="Official Capacity/Designation"
+                                            label={<>Official Capacity/Designation <span className="text-red-500">*</span></>}
                                             name="designation"
                                             value={formData.designation}
                                             onChange={handleChange}
@@ -1090,7 +1920,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
 
                                         <div className="space-y-2">
                                             <label className="text-[10px] font-black uppercase text-slate-900 tracking-widest">
-                                                Date
+                                                Date <span className="text-red-500">*</span>
                                             </label>
                                             <input
                                                 type="date"
@@ -1116,7 +1946,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                                             </div>
                                             <div className="flex-1">
                                                 <p className="text-[11px] text-slate-800 leading-relaxed font-medium">
-                                                    I certify that services rendered were recorded in the patient’s chart and health care institution records and that the herein information given are true and correct.
+                                                    I certify that services rendered were recorded in the patient’s chart and health care institution records and that the herein information given are true and correct. <span className="text-red-500 font-black">*</span>
                                                 </p>
                                             </div>
                                         </label>
@@ -1141,8 +1971,8 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                     {currentStep === 4 ? (
                         <button
                             onClick={() => {
-                                if (formData.finalCertification) {
-                                    onSubmit({ ...formData, grandTotalEnough });
+                                if (formData.finalCertification && isStepValid()) {
+                                    setShowConfirmModal(true);
                                 }
                             }}
                             disabled={!formData.finalCertification || !isStepValid()}
@@ -1168,6 +1998,64 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                     )}
                 </div>
             </div>
+            {showConfirmModal && ReactDOM.createPortal(
+                <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        transition={{ duration: 0.2 }}
+                        className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-md w-full mx-4 overflow-hidden"
+                    >
+                        <div className="bg-philhealth-green p-6 text-white">
+                            <h3 className="text-lg font-black tracking-tight">Confirm Submission</h3>
+                            <p className="text-[11px] opacity-70 mt-1">CF-2 Claim Form 2</p>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <p className="text-sm text-slate-700 font-medium leading-relaxed">
+                                Are all fields correct and complete? Once submitted, this form will be sent for PhilHealth review.
+                            </p>
+                            <p className="text-[11px] text-slate-400 italic leading-relaxed">
+                                Note: Final approval or denial of this claim remains at the discretion of PhilHealth based on their guidelines and verification process.
+                            </p>
+                            <div className="flex gap-3 pt-2">
+                                <button
+                                    onClick={() => setShowConfirmModal(false)}
+                                    className="flex-1 px-5 py-3 rounded-xl border border-slate-200 text-xs font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50 transition-all"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={async () => {
+                                        setShowConfirmModal(false);
+                                        setSubmitting(true);
+                                        await onSubmit({ ...formData, grandTotalEnough });
+                                        setSubmitting(false);
+                                    }}
+                                    className="flex-1 px-5 py-3 rounded-xl bg-philhealth-yellow text-philhealth-green text-xs font-black uppercase tracking-widest hover:opacity-90 active:scale-95 transition-all shadow-lg"
+                                >
+                                    Submit
+                                </button>
+                            </div>
+                        </div>
+                    </motion.div>
+                </div>,
+                document.body
+            )}
+            {submitting && ReactDOM.createPortal(
+                <div className="fixed inset-0 z-[9997] flex items-center justify-center bg-white/60 backdrop-blur-sm">
+                    <div className="flex flex-col items-center gap-4">
+                        <div className="w-12 h-12 border-4 border-philhealth-green/20 border-t-philhealth-green rounded-full animate-spin" />
+                        <p className="text-sm font-black text-philhealth-green uppercase tracking-widest animate-pulse">
+                            Submitting...
+                        </p>
+                        <p className="text-[10px] text-slate-400 font-medium">
+                            Please wait while we save your claim form.
+                        </p>
+                    </div>
+                </div>,
+                document.body
+            )}
         </div>
     );
 }

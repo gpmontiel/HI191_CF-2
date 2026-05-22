@@ -1,15 +1,34 @@
 import 'react';
+import React from 'react';
 import { FileText } from 'lucide-react';
 
 export default function StatusTable({ forms = [], onView, isLoading }) {
+    const [search, setSearch] = React.useState('');
+
+    const filteredForms = forms.filter(form =>
+        form.patient_name?.toLowerCase().includes(search.toLowerCase())
+    );
+
     return (
         <section className="flex-1 flex flex-col bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden min-h-[500px]">
 
             {/* Table Header */}
-            <div className="px-6 py-4 border-b border-slate-100 bg-slate-50">
-                <h2 className="font-bold text-philhealth-green">
+            <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between gap-4">
+                <h2 className="font-bold text-philhealth-green whitespace-nowrap">
                     Form Status Tracker
                 </h2>
+                <div className="relative w-64">
+                    <input
+                        type="text"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder="Search by patient name..."
+                        className="w-full pl-8 pr-3 py-2 text-[11px] font-bold bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-philhealth-green/20 outline-none transition-all"
+                    />
+                    <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+                    </svg>
+                </div>
             </div>
 
             {/* Table Content */}
@@ -46,9 +65,9 @@ export default function StatusTable({ forms = [], onView, isLoading }) {
                             </td>
                         </tr>
                     ) : (
-                        forms.map((form) => (
+                        filteredForms.map((form) => (
                             <tr
-                                key={form.id} // Uses matched cf2_id passed from wrapper mapping
+                                key={form.id}
                                 className="hover:bg-slate-50 transition-all duration-300"
                             >
                                 <td className="px-6 py-5 text-xs font-mono text-philhealth-green font-bold">
@@ -106,7 +125,7 @@ export default function StatusTable({ forms = [], onView, isLoading }) {
             {/* Footer */}
             <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
                 <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">
-                    Showing {forms.length} submitted forms
+                    Showing {filteredForms.length} submitted forms
                 </p>
 
                 <div className="flex gap-1">
