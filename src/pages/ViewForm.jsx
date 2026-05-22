@@ -385,12 +385,10 @@ export default function ViewForm({ data, onClose, isPhilHealth, onApprove, onRej
                                         </p>
                                         <div className="space-y-3">
                                             {(!data.professionals || data.professionals.length === 0) ? (
-                                                // The fallback text if the array is missing or empty
                                                 <div className="p-4 bg-white rounded-xl border border-slate-200/60 text-center">
                                                     <p className="text-sm text-slate-500 italic">No accreditation added.</p>
                                                 </div>
                                             ) : (
-                                                // The mapped array if it has data
                                                 data.professionals.map((prof, i) => (
                                                     <div key={i} className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-white rounded-xl border border-slate-200/60">
                                                         <ReadOnlyDisplay
@@ -588,7 +586,6 @@ export default function ViewForm({ data, onClose, isPhilHealth, onApprove, onRej
                     </AnimatePresence>
                 </div>
 
-                {/* Footer Controls */}
                 {/* Footer Controls */}
                 <div className="px-10 py-8 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
                     <button

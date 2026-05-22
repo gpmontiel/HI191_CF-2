@@ -67,7 +67,7 @@ export default function StatusTable({ forms = [], onView, isLoading }) {
                     ) : (
                         filteredForms.map((form) => (
                             <tr
-                                key={form.id} // Uses matched cf2_id passed from wrapper mapping
+                                key={form.id}
                                 className="hover:bg-slate-50 transition-all duration-300"
                             >
                                 <td className="px-6 py-5 text-xs font-mono text-philhealth-green font-bold">

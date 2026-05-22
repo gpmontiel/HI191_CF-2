@@ -13,7 +13,7 @@ import Toast from "./pages/Toast.jsx"
 export default function App() {
   const [user, setUser] = React.useState(null);
   const [view, setView] = React.useState('dashboard');
-  const [forms, setForms] = useState([]); // Initialized clean, waiting for live data
+  const [forms, setForms] = useState([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const [selectedFormData, setSelectedFormData] = useState(null);
   const [globalToast, setGlobalToast] = useState(null);
@@ -30,7 +30,6 @@ export default function App() {
     rejected: forms.filter((f) => f.status?.toLowerCase() === 'rejected').length,
   };
 
-  // 1. UPDATED FETCHING FUNCTION WITH USER FILTER
   const fetchClaimForms = async (userId) => {
     if (!userId) return;
     try {
@@ -81,18 +80,15 @@ export default function App() {
     }
   };
 
-  // 2. UPDATED EFFECT HOOK
   useEffect(() => {
     if (user?.id && view === 'dashboard') {
       fetchClaimForms(user.id);
     }
   }, [user, view]);
 
-  // 3. UPDATED LOGIN HANDLER TO CAPTURE USER ID
   const handleLogin = (supabaseUser) => {
     setIsLoading(true);
 
-    // If it's a demo string bypass, mock an ID. Otherwise, read actual Supabase auth metadata.
     if (typeof supabaseUser === 'string') {
       setUser({
         id: supabaseUser === 'phy1' ? 'id_of_phy1_here' : 'id_of_phy2_here',
@@ -100,7 +96,7 @@ export default function App() {
       });
     } else {
       setUser({
-        id: supabaseUser?.id, // Supabase native authenticated UUID
+        id: supabaseUser?.id,
         email: supabaseUser?.email
       });
     }
@@ -115,8 +111,6 @@ export default function App() {
   };
 
   const handleNewSubmission = () => setView('form');
-  const handleCancelSubmission = () => setView('dashboard');
-
 
   // FOR THE ACCEPT REJECT ACTIONS
   const [confirmAction, setConfirmAction] = useState(null); // { type: 'approve'|'reject', id }
@@ -136,7 +130,6 @@ export default function App() {
           .eq('cf2_id', confirmAction.id);
       if (error) throw error;
 
-      // Update local state so table reflects change immediately
       setForms(prev => prev.map(f =>
           f.id === confirmAction.id ? { ...f, status: newStatus } : f
       ));
@@ -228,7 +221,7 @@ export default function App() {
           .from('special_consideration')
           .insert([{
             confinement_id: data.confinement_id || null,
-            zbenefit_code:  parseInt_(sc.z_benefit_code) ?? 0,  // bigint NOT NULL, default 0 if blank
+            zbenefit_code:  parseInt_(sc.z_benefit_code) ?? 0,
             tbdots_package: tbPhase,
             hiv_lab_number: parseInt_(sc.hiv_lab_number),
           }])
@@ -254,7 +247,6 @@ export default function App() {
         if (!val?.checked) return;
         (val.dates || []).forEach(dateStr => {
           if (!dateStr) return;
-          // type="date" already produces yyyy-mm-dd — use directly
           repRows.push({ consideration_id: considerationId, procedure: PROC_LABELS[key], session_date: dateStr });
         });
       });
@@ -274,7 +266,7 @@ export default function App() {
       ].filter(r => r.date || r.others_desc).map(r => ({
         consideration_id: considerationId,
         vaccine_type:     r.vaccine_type,
-        date:             r.date || null,   // already yyyy-mm-dd from type="date"
+        date:             r.date || null,
         others_desc:      r.others_desc || null,
       }));
       if (biteRows.length > 0) {
@@ -286,7 +278,6 @@ export default function App() {
       const mcpRows = (sc.mcp_dates || [])
         .map((dateStr, idx) => {
           if (!dateStr) return null;
-          // type="date" already produces yyyy-mm-dd — use directly
           return { consideration_id: considerationId, checkup_no: idx + 1, checkup_date: dateStr };
         })
         .filter(Boolean);
@@ -308,7 +299,7 @@ export default function App() {
           is_cord_clamping:     nb.is_cord_clamping     || false,
           is_eye_prophylaxis:   nb.is_eye_prophylaxis   || false,
           is_weighing:          nb.is_weighing          || false,
-          is_vitaminK:          nb.is_vitamink          || false,  // capital K in DB
+          is_vitaminK:          nb.is_vitamink          || false,
           is_bcg:               nb.is_bcg               || false,
           is_nonseparation:     nb.is_nonseparation     || false,
           is_hepaB:             nb.is_hepaB             || false,
@@ -316,14 +307,8 @@ export default function App() {
         if (nbError) throw nbError;
       }
 
-      // ---- Update confinement_info with all editable Part II fields ----
-      // Clone a new confinement row for this submission
-        // ---- Update confinement_info with all editable Part II fields ----
+        let currentPatientId = data.patient_id;
 
-        // 1. Determine the Patient ID
-        let currentPatientId = data.patient_id; // Use direct patient_id if the form passes it
-
-        // If we don't have a direct patient_id, but we DO have an old confinement_id, fetch it
         if (!currentPatientId && data.confinement_id) {
             const { data: origConf } = await supabase
                 .from('confinement_info')
@@ -334,7 +319,6 @@ export default function App() {
             if (origConf) currentPatientId = origConf.patient_id;
         }
 
-        // 2. Insert the new confinement row AS LONG AS we have a patient to attach it to
         if (currentPatientId) {
             const { data: newConf, error: newConfErr } = await supabase
                 .from('confinement_info')
@@ -364,10 +348,8 @@ export default function App() {
 
             if (newConfErr) throw newConfErr;
 
-            // OVERRIDE the old confinement_id with the newly created one so the rest of the inserts link correctly
             data.confinement_id = newConf.confinement_id;
         } else {
-            // Failsafe so it doesn't fail silently anymore
             throw new Error("Cannot create confinement record: No Patient ID could be found or determined.");
         }
 
@@ -453,7 +435,6 @@ export default function App() {
       setIsLoading(false);
     }
   };
-
 
   if (!user) return <LoginForm onLogin={handleLogin} isLoading={isLoading} />;
 
@@ -816,7 +797,6 @@ export default function App() {
                     </aside>
                 )}
 
-                {/* PhilHealth gets a compact stats bar above the full-width table */}
                 {isPhilHealth && (
                     <div className="w-full flex flex-col gap-6">
                       <div className="grid grid-cols-3 gap-4">

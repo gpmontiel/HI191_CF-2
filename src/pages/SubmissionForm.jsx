@@ -35,10 +35,10 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
         const fetchHCI = async () => {
             const { data, error } = await supabase
                 .from('hci_info')
-                .select('*') // SELECT ALL na lang muna
+                .select('*')
                 .order('hci_name', { ascending: true });
 
-            console.log('HCI columns:', data?.[0]); // this shows exact column names
+            console.log('HCI columns:', data?.[0]);
 
             if (error) {
                 setToast({ message: 'Could not load HCI list from database.', type: 'error' });
@@ -55,7 +55,6 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
         // Part I - HCI
         hci_id: '',
         pan_number: '',
-        // may hci_name na sa part IV
         hci_address_street: '',
         hci_address_city: '',
         hci_address_province: '',
@@ -83,7 +82,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
         time_expiration: '',
         disposition: '',
         accomodation_type: '',
-        admission_diagnosis: '',    // free text
+        admission_diagnosis: '',
         date_time_expiration: '',
         transferred_hci_name: '',
         transferred_street: '',
@@ -107,7 +106,6 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
             simple_debridement: { checked: false, dates: [''] }
         },
 
-        // Add these inside your initial useState block under special_considerations:
         packages: {
             z_benefit_code: '',
             mcp_dates: ['', '', '', ''],
@@ -144,7 +142,6 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
 
         professionals: [],
 
-        // ---------------- !!!!! DON'T CHANGE THE PART BELOW !!!!! ---------------- //
         // Part III - Section A
         certifiedEnough: false,
         hciFeesEnough: '',
@@ -186,7 +183,6 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
         designation: '',
         date_signed: '',
         finalCertification: false,
-        // ---------------- !!!!! DON'T CHANGE THE PART ABOVE !!!!! ---------------- //
     });
 
     const grandTotalEnough = formData.certifiedEnough
@@ -255,7 +251,7 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
         }));
     };
 
-    // Part II - fetching from database happens here
+    // Part II - fetching from database
     const handlePatientSearch = async (query) => {
         console.log('\n--- [DEBUG Patient Search] STARTED ---');
         console.log('[DEBUG Patient Search] 1. Initial Query:', query);
@@ -313,7 +309,6 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
 
         if (!confinements || confinements.length === 0) {
             console.log('[DEBUG Patient Search] 5. No confinements found. Mapping default patient structures.');
-            // Patients found but no confinement records — still show them so they can be selected
             const results = patients.map(p => ({
                 confinement_id: null,
                 patient_id: p.patient_id,
@@ -349,7 +344,6 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
         console.log('\n--- [DEBUG Patient Select] STARTED ---');
         console.log('[DEBUG Patient Select] Record selected by user:', record);
 
-        // Let's verify what string is actually being built for the query input
         const fullNameStr = `${record.last_name}, ${record.first_name} ${record.middle_name || ''}`.trim();
         console.log('[DEBUG Patient Select] String setting to patientQuery:', fullNameStr);
 
@@ -358,7 +352,6 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
         setPatientSelected(true);
 
         try {
-            // 1. Fetch philhealth benefits (linked by confinement_id)
             const { data: philhealthData } = await supabase
                 .from('philhealth_benefits')
                 .select('*')
@@ -367,13 +360,11 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
 
             console.log('[DEBUG Patient Select] philhealthData fetched:', philhealthData);
 
-            // Safely declare variables to prevent crashes if sub-queries are skipped
             let repData = [];
             let biteData = [];
             let mcpData = [];
             let newbornRows = [];
 
-            // special_consideration is linked by confinement_id — look it up that way
             const { data: scRow } = await supabase
                 .from('special_consideration')
                 .select('consideration_id')
@@ -421,7 +412,6 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
                 patient_middle_name:      record.middle_name || '',
                 patient_name_extension:   record.name_extension || '',
 
-                // Start fresh for editable fields
                 is_referred:              null,
                 name_referral:            '',
                 building_street_referral: '',
@@ -578,20 +568,6 @@ export default function SubmissionForm({ onSubmit, onCancel }) {
         }
         if (currentStep === 4) return formData.finalCertification && !!formData.hci_representative_name;
         return true;
-    };
-
-    const formatDate = (ts) => {
-        if (!ts) return '';
-        return new Date(ts).toLocaleDateString('en-PH', {
-            year: 'numeric', month: 'long', day: 'numeric'
-        });
-    };
-
-    const formatTime = (ts) => {
-        if (!ts) return '';
-        return new Date(ts).toLocaleTimeString('en-PH', {
-            hour: 'numeric', minute: '2-digit', hour12: true
-        });
     };
 
     return (

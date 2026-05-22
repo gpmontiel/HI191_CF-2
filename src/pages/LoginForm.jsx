@@ -35,10 +35,6 @@ export default function LoginForm({ onLogin, isLoading: externalLoading }) {
         } finally {
             setInternalLoading(false);
         }
-
-        // if (email && password) {
-        //     onLogin(email);
-        // }
     };
 
     return (
